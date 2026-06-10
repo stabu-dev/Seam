@@ -26,6 +26,9 @@ public final class SeamRuntimeStepReport{
     public int mutationApplied;
     public int mutationFailed;
 
+    public int renderInvalidationPendingBefore;
+    public int renderInvalidationPendingAfter;
+
     public int buildCount;
     public int powerGraphCount;
     public int bulletCount;
@@ -52,7 +55,9 @@ public final class SeamRuntimeStepReport{
         frameBefore = runtime.clock.frame();
         clockTickBefore = runtime.clock.tick();
         stateTickBefore = runtime.state.tick;
+
         mutationPendingBefore = runtime.mutations.size();
+        renderInvalidationPendingBefore = runtime.renderInvalidation.size();
     }
 
     public void end(SeamRuntime runtime){
@@ -61,7 +66,9 @@ public final class SeamRuntimeStepReport{
         frameAfter = runtime.clock.frame();
         clockTickAfter = runtime.clock.tick();
         stateTickAfter = runtime.state.tick;
+
         mutationPendingAfter = runtime.mutations.size();
+        renderInvalidationPendingAfter = runtime.renderInvalidation.size();
 
         buildCount = runtime.groups.build.size();
         powerGraphCount = runtime.groups.powerGraph.size();
@@ -119,6 +126,7 @@ public final class SeamRuntimeStepReport{
         ", mutations=" + mutationApplied +
         ", mutationFailed=" + mutationFailed +
         ", mutationPending=" + mutationPendingBefore + "->" + mutationPendingAfter +
+        ", renderInvalidationPending=" + renderInvalidationPendingBefore + "->" + renderInvalidationPendingAfter +
         ", builds=" + buildCount +
         ", powerGraphs=" + powerGraphCount +
         ", bullets=" + bulletCount +

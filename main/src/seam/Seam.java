@@ -12,7 +12,13 @@ public class Seam extends Mod{
     public static final SeamEngine engine = new SeamEngine(runtimes, stack, executor);
     public static final SeamConfigService config = new SeamConfigService(runtimes, executor);
     public static final SeamBuildService builds = new SeamBuildService(runtimes, executor);
+    public static final SeamTerrainService terrain = new SeamTerrainService(runtimes, executor);
     public static final SeamQueryService query = new SeamQueryService(runtimes, executor);
+    public static final SeamViewRegistry views = new SeamViewRegistry();
+    public static final SeamPickService picks = new SeamPickService(runtimes, views, query);
+    public static final SeamRenderService rendering = new SeamRenderService(runtimes, views);
+    public static final SeamDrawScope drawScope = new SeamDrawScope(stack);
+    public static final SeamWorldDraw worldDraw = new SeamWorldDraw(runtimes, views, rendering, drawScope);
 
     public static SeamRuntime mainRuntime;
 
@@ -29,11 +35,15 @@ public class Seam extends Mod{
         Events.on(WorldLoadEvent.class, event -> refreshMainRuntime());
 
         Events.on(ResetEvent.class, event -> {
+            worldDraw.clear();
+            rendering.clear();
+            views.clear();
             runtimes.clearSubworlds();
             refreshMainRuntime();
         });
 
         Events.run(Trigger.update, engine::update);
+        Events.run(Trigger.draw, worldDraw::draw);
 
         Log.info("[Seam] Core initialized successfully.");
     }

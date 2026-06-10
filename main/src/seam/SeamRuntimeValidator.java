@@ -43,6 +43,9 @@ public final class SeamRuntimeValidator{
         require(runtime.state != null, "Runtime state is null: " + runtime);
         require(runtime.groups != null, "Runtime group set is null: " + runtime);
         require(runtime.collisions != null, "Runtime collisions is null: " + runtime);
+        require(runtime.clock != null, "Runtime clock is null: " + runtime);
+        require(runtime.mutations != null, "Runtime mutation queue is null: " + runtime);
+        require(runtime.renderInvalidation != null, "Runtime render invalidation queue is null: " + runtime);
 
         validateGroups(runtime.groups);
 

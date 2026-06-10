@@ -2,6 +2,7 @@ package seam;
 
 import arc.struct.*;
 import arc.util.*;
+import mindustry.*;
 import mindustry.gen.*;
 
 public final class SeamEngine{
@@ -12,6 +13,7 @@ public final class SeamEngine{
     private boolean enabled = true;
     private boolean automatic = true;
     private boolean validateAfterStep = true;
+    private boolean respectMainPause = true;
 
     private SeamStepReport lastReport;
 
@@ -57,6 +59,14 @@ public final class SeamEngine{
         this.validateAfterStep = validateAfterStep;
     }
 
+    public boolean respectMainPause(){
+        return respectMainPause;
+    }
+
+    public void respectMainPause(boolean respectMainPause){
+        this.respectMainPause = respectMainPause;
+    }
+
     public SeamStepReport lastReport(){
         return lastReport;
     }
@@ -72,6 +82,13 @@ public final class SeamEngine{
         if(!SeamLifecycle.mainWorldReady()){
             SeamStepReport report = new SeamStepReport();
             report.skip("main world is not ready");
+            lastReport = report;
+            return report;
+        }
+
+        if(respectMainPause && Vars.state != null && Vars.state.isPaused()){
+            SeamStepReport report = new SeamStepReport();
+            report.skip("main game is paused");
             lastReport = report;
             return report;
         }
@@ -160,6 +177,7 @@ public final class SeamEngine{
             run(runtime, SeamPhase.updatePre, report, active -> {
                 active.clock.advance(Time.delta);
                 active.state.tick += active.clock.delta();
+                active.state.updateId++;
                 return null;
             });
 
@@ -178,67 +196,13 @@ public final class SeamEngine{
                 });
             }
 
-            if(policy.buildings){
-                run(runtime, SeamPhase.updateBuildings, report, active -> {
-                    Groups.build.update();
+            if(usesVanillaCentralEntityUpdate(policy)){
+                run(runtime, SeamPhase.updateGroups, report, active -> {
+                    Groups.update();
                     return null;
                 });
-            }
-
-            if(policy.power){
-                run(runtime, SeamPhase.updatePower, report, active -> {
-                    Groups.powerGraph.update();
-                    return null;
-                });
-            }
-
-            if(policy.puddles){
-                run(runtime, SeamPhase.updatePuddles, report, active -> {
-                    Groups.puddle.update();
-                    return null;
-                });
-            }
-
-            if(policy.fires){
-                run(runtime, SeamPhase.updateFires, report, active -> {
-                    Groups.fire.update();
-                    return null;
-                });
-            }
-
-            if(policy.weather){
-                run(runtime, SeamPhase.updateWeather, report, active -> {
-                    Groups.weather.update();
-                    return null;
-                });
-            }
-
-            if(policy.bullets){
-                run(runtime, SeamPhase.updateBullets, report, active -> {
-                    Groups.bullet.update();
-                    return null;
-                });
-            }
-
-            if(policy.units){
-                run(runtime, SeamPhase.updateUnits, report, active -> {
-                    Groups.unit.update();
-                    return null;
-                });
-            }
-
-            if(policy.sync){
-                run(runtime, SeamPhase.updateSync, report, active -> {
-                    Groups.sync.update();
-                    return null;
-                });
-            }
-
-            if(policy.draw){
-                run(runtime, SeamPhase.updateDraw, report, active -> {
-                    Groups.draw.update();
-                    return null;
-                });
+            }else{
+                updateLightweightBuildingRuntime(runtime, report, policy);
             }
 
             run(runtime, SeamPhase.updatePost, report, active -> {
@@ -253,6 +217,33 @@ public final class SeamEngine{
         }finally{
             report.end(runtime);
         }
+    }
+
+    private void updateLightweightBuildingRuntime(SeamRuntime runtime, SeamRuntimeStepReport report, SeamRuntimeUpdatePolicy policy){
+        if(policy.buildings){
+            run(runtime, SeamPhase.updateBuildings, report, active -> {
+                Groups.build.update();
+                return null;
+            });
+        }
+
+        if(policy.power){
+            run(runtime, SeamPhase.updatePower, report, active -> {
+                Groups.powerGraph.update();
+                return null;
+            });
+        }
+    }
+
+    private boolean usesVanillaCentralEntityUpdate(SeamRuntimeUpdatePolicy policy){
+        return policy.puddles
+        || policy.fires
+        || policy.weather
+        || policy.bullets
+        || policy.units
+        || policy.sync
+        || policy.draw
+        || policy.collisions;
     }
 
     private void run(

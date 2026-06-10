@@ -10,11 +10,11 @@ public final class SeamRuntimeUpdatePolicy{
     public final boolean puddles;
     public final boolean fires;
     public final boolean weather;
-
     public final boolean bullets;
     public final boolean units;
     public final boolean sync;
     public final boolean draw;
+    public final boolean collisions;
 
     private SeamRuntimeUpdatePolicy(Builder builder){
         this.enabled = builder.enabled;
@@ -26,16 +26,26 @@ public final class SeamRuntimeUpdatePolicy{
         this.puddles = builder.puddles;
         this.fires = builder.fires;
         this.weather = builder.weather;
-
         this.bullets = builder.bullets;
         this.units = builder.units;
         this.sync = builder.sync;
         this.draw = builder.draw;
+        this.collisions = builder.collisions;
+    }
+
+    public static Builder builder(){
+        return new Builder();
     }
 
     public static SeamRuntimeUpdatePolicy disabled(){
         return builder()
         .enabled(false)
+        .build();
+    }
+
+    public static SeamRuntimeUpdatePolicy none(){
+        return builder()
+        .enabled(true)
         .build();
     }
 
@@ -46,13 +56,10 @@ public final class SeamRuntimeUpdatePolicy{
         .teams(true)
         .buildings(true)
         .power(true)
-        .puddles(true)
-        .fires(true)
-        .weather(true)
         .build();
     }
 
-    public static SeamRuntimeUpdatePolicy fullUnsafe(){
+    public static SeamRuntimeUpdatePolicy all(){
         return builder()
         .enabled(true)
         .mutations(true)
@@ -66,16 +73,117 @@ public final class SeamRuntimeUpdatePolicy{
         .units(true)
         .sync(true)
         .draw(true)
+        .collisions(true)
         .build();
     }
 
+    public boolean enabled(){
+        return enabled;
+    }
+
+    public boolean mutations(){
+        return mutations;
+    }
+
+    public boolean teams(){
+        return teams;
+    }
+
+    public boolean buildings(){
+        return buildings;
+    }
+
+    public boolean power(){
+        return power;
+    }
+
+    public boolean puddles(){
+        return puddles;
+    }
+
+    public boolean fires(){
+        return fires;
+    }
+
+    public boolean weather(){
+        return weather;
+    }
+
+    public boolean bullets(){
+        return bullets;
+    }
+
+    public boolean units(){
+        return units;
+    }
+
+    public boolean sync(){
+        return sync;
+    }
+
+    public boolean draw(){
+        return draw;
+    }
+
+    public boolean collisions(){
+        return collisions;
+    }
+
+    public boolean updateMutations(){
+        return enabled && mutations;
+    }
+
+    public boolean updateTeams(){
+        return enabled && teams;
+    }
+
+    public boolean updateBuildings(){
+        return enabled && buildings;
+    }
+
+    public boolean updatePower(){
+        return enabled && power;
+    }
+
+    public boolean updatePuddles(){
+        return enabled && puddles;
+    }
+
+    public boolean updateFires(){
+        return enabled && fires;
+    }
+
+    public boolean updateWeather(){
+        return enabled && weather;
+    }
+
+    public boolean updateBullets(){
+        return enabled && bullets;
+    }
+
+    public boolean updateUnits(){
+        return enabled && units;
+    }
+
+    public boolean updateSync(){
+        return enabled && sync;
+    }
+
+    public boolean updateDraw(){
+        return enabled && draw;
+    }
+
+    public boolean updateCollisions(){
+        return enabled && collisions;
+    }
+
     public SeamRuntimeUpdatePolicy withEnabled(boolean enabled){
-        return copy()
+        return toBuilder()
         .enabled(enabled)
         .build();
     }
 
-    public Builder copy(){
+    public Builder toBuilder(){
         return builder()
         .enabled(enabled)
         .mutations(mutations)
@@ -88,11 +196,8 @@ public final class SeamRuntimeUpdatePolicy{
         .bullets(bullets)
         .units(units)
         .sync(sync)
-        .draw(draw);
-    }
-
-    public static Builder builder(){
-        return new Builder();
+        .draw(draw)
+        .collisions(collisions);
     }
 
     @Override
@@ -110,6 +215,7 @@ public final class SeamRuntimeUpdatePolicy{
         ", units=" + units +
         ", sync=" + sync +
         ", draw=" + draw +
+        ", collisions=" + collisions +
         '}';
     }
 
@@ -123,11 +229,14 @@ public final class SeamRuntimeUpdatePolicy{
         private boolean puddles;
         private boolean fires;
         private boolean weather;
-
         private boolean bullets;
         private boolean units;
         private boolean sync;
         private boolean draw;
+        private boolean collisions;
+
+        private Builder(){
+        }
 
         public Builder enabled(boolean enabled){
             this.enabled = enabled;
@@ -186,6 +295,11 @@ public final class SeamRuntimeUpdatePolicy{
 
         public Builder draw(boolean draw){
             this.draw = draw;
+            return this;
+        }
+
+        public Builder collisions(boolean collisions){
+            this.collisions = collisions;
             return this;
         }
 

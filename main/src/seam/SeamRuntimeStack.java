@@ -1,5 +1,7 @@
 package seam;
 
+import arc.*;
+import arc.graphics.*;
 import arc.struct.*;
 import mindustry.*;
 import mindustry.core.*;
@@ -7,18 +9,24 @@ import mindustry.entities.*;
 import mindustry.gen.*;
 
 public final class SeamRuntimeStack{
-    private final Seq<Frame> stack = new Seq<>();
-
-    public SeamRuntime current(){
-        return stack.isEmpty() ? null : stack.peek().runtime;
-    }
-
-    public SeamPhase phase(){
-        return stack.isEmpty() ? null : stack.peek().phase;
-    }
+    private final Seq<SeamRuntime> stack = new Seq<>();
+    private final Seq<SeamPhase> phases = new Seq<>();
+    private final Seq<ContextSnapshot> snapshots = new Seq<>();
 
     public boolean active(){
         return !stack.isEmpty();
+    }
+
+    public int depth(){
+        return stack.size;
+    }
+
+    public SeamRuntime current(){
+        return stack.isEmpty() ? null : stack.peek();
+    }
+
+    public SeamPhase currentPhase(){
+        return phases.isEmpty() ? null : phases.peek();
     }
 
     public void enter(SeamRuntime runtime){
@@ -34,10 +42,13 @@ public final class SeamRuntimeStack{
             throw new NullPointerException("phase");
         }
 
-        runtime.requireLoaded();
+        runtime.requireWorldReady();
 
         ContextSnapshot snapshot = new ContextSnapshot();
-        stack.add(new Frame(runtime, phase, snapshot));
+
+        snapshots.add(snapshot);
+        stack.add(runtime);
+        phases.add(phase);
 
         Vars.world = runtime.world;
         Vars.state = runtime.state;
@@ -55,33 +66,49 @@ public final class SeamRuntimeStack{
         Groups.weather = runtime.groups.weather;
         Groups.label = runtime.groups.label;
         Groups.powerGraph = runtime.groups.powerGraph;
+
+        if(usesRuntimeCamera(phase)){
+            applyRuntimeCamera(runtime);
+        }
     }
 
     public void exit(){
         if(stack.isEmpty()){
-            throw new IllegalStateException("Cannot exit Seam runtime context: stack is empty.");
+            return;
         }
 
-        Frame frame = stack.pop();
-        frame.snapshot.restore();
+        stack.pop();
+        phases.pop();
+
+        ContextSnapshot snapshot = snapshots.pop();
+        snapshot.restore();
     }
 
     public void exitAll(){
-        while(!stack.isEmpty()){
+        while(active()){
             exit();
         }
     }
 
-    private static final class Frame{
-        final SeamRuntime runtime;
-        final SeamPhase phase;
-        final ContextSnapshot snapshot;
+    private static boolean usesRuntimeCamera(SeamPhase phase){
+        return phase == SeamPhase.updateGroups;
+    }
 
-        Frame(SeamRuntime runtime, SeamPhase phase, ContextSnapshot snapshot){
-            this.runtime = runtime;
-            this.phase = phase;
-            this.snapshot = snapshot;
+    private static void applyRuntimeCamera(SeamRuntime runtime){
+        Camera camera = Core.camera;
+
+        if(camera == null){
+            return;
         }
+
+        float width = Math.max(runtime.world.unitWidth(), Vars.tilesize);
+        float height = Math.max(runtime.world.unitHeight(), Vars.tilesize);
+
+        camera.position.x = width / 2f;
+        camera.position.y = height / 2f;
+        camera.width = width;
+        camera.height = height;
+        camera.update();
     }
 
     private static final class ContextSnapshot{
@@ -102,6 +129,12 @@ public final class SeamRuntimeStack{
         private final EntityGroup<WorldLabel> label;
         private final EntityGroup<PowerGraphUpdaterc> powerGraph;
 
+        private final boolean hasCamera;
+        private final float cameraX;
+        private final float cameraY;
+        private final float cameraWidth;
+        private final float cameraHeight;
+
         ContextSnapshot(){
             this.world = Vars.world;
             this.state = Vars.state;
@@ -119,6 +152,22 @@ public final class SeamRuntimeStack{
             this.weather = Groups.weather;
             this.label = Groups.label;
             this.powerGraph = Groups.powerGraph;
+
+            Camera camera = Core.camera;
+
+            this.hasCamera = camera != null;
+
+            if(camera == null){
+                this.cameraX = 0f;
+                this.cameraY = 0f;
+                this.cameraWidth = 0f;
+                this.cameraHeight = 0f;
+            }else{
+                this.cameraX = camera.position.x;
+                this.cameraY = camera.position.y;
+                this.cameraWidth = camera.width;
+                this.cameraHeight = camera.height;
+            }
         }
 
         void restore(){
@@ -138,6 +187,14 @@ public final class SeamRuntimeStack{
             Groups.weather = weather;
             Groups.label = label;
             Groups.powerGraph = powerGraph;
+
+            if(hasCamera && Core.camera != null){
+                Core.camera.position.x = cameraX;
+                Core.camera.position.y = cameraY;
+                Core.camera.width = cameraWidth;
+                Core.camera.height = cameraHeight;
+                Core.camera.update();
+            }
         }
     }
 }
