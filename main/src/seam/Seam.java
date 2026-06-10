@@ -1,7 +1,8 @@
 package seam;
 
+import arc.*;
 import arc.util.*;
-import mindustry.*;
+import mindustry.game.EventType.*;
 import mindustry.mod.*;
 
 public class Seam extends Mod{
@@ -15,16 +16,15 @@ public class Seam extends Mod{
     @Override
     public void init(){
         SeamBootstrapValidator.validate();
+        refreshMainRuntime();
 
-        mainRuntime = new SeamRuntime(
-        0,
-        "main",
-        Vars.world,
-        Vars.state,
-        new SeamGroupSet(Vars.world.width(), Vars.world.height()),
-        Vars.collisions
-        );
+        Events.on(WorldLoadEvent.class, event -> refreshMainRuntime());
+        Events.on(ResetEvent.class, event -> refreshMainRuntime());
 
         Log.info("[Seam] Core initialized successfully.");
+    }
+
+    public static void refreshMainRuntime(){
+        mainRuntime = SeamRuntime.wrapCurrent(0, "main");
     }
 }

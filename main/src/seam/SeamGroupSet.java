@@ -1,5 +1,6 @@
 package seam;
 
+import mindustry.*;
 import mindustry.entities.*;
 import mindustry.gen.*;
 
@@ -17,26 +18,70 @@ public final class SeamGroupSet{
     public final EntityGroup<WorldLabel> label;
     public final EntityGroup<PowerGraphUpdaterc> powerGraph;
 
-    @SuppressWarnings("unchecked")
     public SeamGroupSet(int width, int height){
-        float finalWorldBounds = 250f;
-        float w = width * 8f + finalWorldBounds * 2;
-        float h = height * 8f + finalWorldBounds * 2;
+        float finalWorldBounds = Vars.finalWorldBounds;
+        float w = width * Vars.tilesize + finalWorldBounds * 2f;
+        float h = height * Vars.tilesize + finalWorldBounds * 2f;
 
-        all = new EntityGroup<>(Entityc.class, false, false, SeamGroupSetHelper.all);
-        player = new EntityGroup<>(Player.class, false, true, SeamGroupSetHelper.player);
-        bullet = new EntityGroup<>(Bullet.class, true, false, SeamGroupSetHelper.bullet);
-        unit = new EntityGroup<>(Unit.class, true, true, SeamGroupSetHelper.unit);
-        build = new EntityGroup<>(Building.class, false, false, SeamGroupSetHelper.build);
-        sync = new EntityGroup<>(Syncc.class, false, true, SeamGroupSetHelper.sync);
-        draw = new EntityGroup<>(Drawc.class, false, false, SeamGroupSetHelper.draw);
-        fire = new EntityGroup<>(Fire.class, false, false, SeamGroupSetHelper.fire);
-        puddle = new EntityGroup<>(Puddle.class, false, false, SeamGroupSetHelper.puddle);
-        weather = new EntityGroup<>(WeatherState.class, false, false, SeamGroupSetHelper.weather);
-        label = new EntityGroup<>(WorldLabel.class, false, true, SeamGroupSetHelper.label);
-        powerGraph = new EntityGroup<>(PowerGraphUpdaterc.class, false, false, SeamGroupSetHelper.powerGraph);
+        all = new SeamEntityGroup<>(Entityc.class, false, false);
+        player = new SeamEntityGroup<>(Player.class, false, true);
+        bullet = new SeamEntityGroup<>(Bullet.class, true, false);
+        unit = new SeamEntityGroup<>(Unit.class, true, true);
+        build = new SeamEntityGroup<>(Building.class, false, false);
+        sync = new SeamEntityGroup<>(Syncc.class, false, true);
+        draw = new SeamEntityGroup<>(Drawc.class, false, false);
+        fire = new SeamEntityGroup<>(Fire.class, false, false);
+        puddle = new SeamEntityGroup<>(Puddle.class, false, false);
+        weather = new SeamEntityGroup<>(WeatherState.class, false, false);
+        label = new SeamEntityGroup<>(WorldLabel.class, false, true);
+        powerGraph = new SeamEntityGroup<>(PowerGraphUpdaterc.class, false, false);
 
         bullet.resize(-finalWorldBounds, -finalWorldBounds, w, h);
         unit.resize(-finalWorldBounds, -finalWorldBounds, w, h);
+    }
+
+    private SeamGroupSet(
+    EntityGroup<Entityc> all,
+    EntityGroup<Player> player,
+    EntityGroup<Bullet> bullet,
+    EntityGroup<Unit> unit,
+    EntityGroup<Building> build,
+    EntityGroup<Syncc> sync,
+    EntityGroup<Drawc> draw,
+    EntityGroup<Fire> fire,
+    EntityGroup<Puddle> puddle,
+    EntityGroup<WeatherState> weather,
+    EntityGroup<WorldLabel> label,
+    EntityGroup<PowerGraphUpdaterc> powerGraph
+    ){
+        this.all = all;
+        this.player = player;
+        this.bullet = bullet;
+        this.unit = unit;
+        this.build = build;
+        this.sync = sync;
+        this.draw = draw;
+        this.fire = fire;
+        this.puddle = puddle;
+        this.weather = weather;
+        this.label = label;
+        this.powerGraph = powerGraph;
+    }
+
+    public static SeamGroupSet wrapCurrent(){
+        return new SeamGroupSet(
+        Groups.all,
+        Groups.player,
+        Groups.bullet,
+        Groups.unit,
+        Groups.build,
+        Groups.sync,
+        Groups.draw,
+        Groups.fire,
+        Groups.puddle,
+        Groups.weather,
+        Groups.label,
+        Groups.powerGraph
+        );
     }
 }

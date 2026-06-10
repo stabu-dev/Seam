@@ -1,5 +1,6 @@
 package seam;
 
+import mindustry.*;
 import mindustry.core.*;
 import mindustry.entities.*;
 
@@ -21,6 +22,10 @@ public final class SeamRuntime{
         this.collisions = new EntityCollisions();
 
         this.world.resize(width, height);
+
+        if(this.world.tiles != null){
+            this.world.tiles.fill();
+        }
     }
 
     public SeamRuntime(int id, String name, World world, GameState state, SeamGroupSet groups, EntityCollisions collisions){
@@ -30,5 +35,16 @@ public final class SeamRuntime{
         this.state = state;
         this.groups = groups;
         this.collisions = collisions;
+    }
+
+    public static SeamRuntime wrapCurrent(int id, String name){
+        return new SeamRuntime(
+        id,
+        name,
+        Vars.world,
+        Vars.state,
+        SeamGroupSet.wrapCurrent(),
+        Vars.collisions
+        );
     }
 }
