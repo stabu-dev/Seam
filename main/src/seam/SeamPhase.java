@@ -7,6 +7,7 @@ public enum SeamPhase{
     save,
 
     updatePre,
+    updateMutations,
     updateTeams,
     updateBuildings,
     updatePower,

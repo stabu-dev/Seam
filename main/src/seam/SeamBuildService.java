@@ -26,16 +26,7 @@ public final class SeamBuildService{
         SeamRuntime runtime = runtimes.get(runtimeId);
 
         if(runtime == null){
-            return SeamBuildResult.failure(
-            null,
-            x,
-            y,
-            Point2.pack(x, y),
-            block,
-            team,
-            rotation,
-            "runtime not found"
-            );
+            return SeamBuildResult.failure(null, x, y, Point2.pack(x, y), block, team, rotation, "runtime not found");
         }
 
         return place(runtime, x, y, block, team, rotation);
@@ -60,17 +51,7 @@ public final class SeamBuildService{
 
         try{
             return executor.callRegisteredExclusive(runtime, SeamPhase.buildPlace, active -> {
-                Tile tile = active.world.tile(x, y);
-
-                if(tile == null){
-                    return SeamBuildResult.failure(active, x, y, tilePos, block, team, rotation, "tile not found");
-                }
-
-                Block previous = tile.block();
-
-                tile.setBlock(block, team, rotation);
-
-                return SeamBuildResult.success(active, tile, previous, block, team, rotation, "placed");
+                return SeamTileMutator.place(active, x, y, block, team, rotation);
             });
         }catch(Throwable throwable){
             return SeamBuildResult.failure(runtime, x, y, tilePos, block, team, rotation, throwable);
@@ -85,16 +66,7 @@ public final class SeamBuildService{
         SeamRuntime runtime = runtimes.get(runtimeId);
 
         if(runtime == null){
-            return SeamBuildResult.failure(
-            null,
-            x,
-            y,
-            Point2.pack(x, y),
-            Blocks.air,
-            Team.derelict,
-            0,
-            "runtime not found"
-            );
+            return SeamBuildResult.failure(null, x, y, Point2.pack(x, y), Blocks.air, Team.derelict, 0, "runtime not found");
         }
 
         return remove(runtime, x, y);
@@ -119,17 +91,7 @@ public final class SeamBuildService{
 
         try{
             return executor.callRegisteredExclusive(runtime, SeamPhase.buildRemove, active -> {
-                Tile tile = active.world.tile(x, y);
-
-                if(tile == null){
-                    return SeamBuildResult.failure(active, x, y, tilePos, Blocks.air, Team.derelict, 0, "tile not found");
-                }
-
-                Block previous = tile.block();
-
-                tile.setBlock(Blocks.air);
-
-                return SeamBuildResult.success(active, tile, previous, Blocks.air, Team.derelict, 0, "removed");
+                return SeamTileMutator.remove(active, x, y);
             });
         }catch(Throwable throwable){
             return SeamBuildResult.failure(runtime, x, y, tilePos, Blocks.air, Team.derelict, 0, throwable);
@@ -140,15 +102,49 @@ public final class SeamBuildService{
         return remove(runtime, Point2.x(tilePos), Point2.y(tilePos));
     }
 
-    private SeamBuildResult preflight(
-    SeamRuntime runtime,
-    int x,
-    int y,
-    int tilePos,
-    Block block,
-    Team team,
-    int rotation
-    ){
+    public SeamMutation deferPlace(int runtimeId, int x, int y, Block block, Team team, int rotation){
+        SeamRuntime runtime = runtimes.get(runtimeId);
+
+        if(runtime == null){
+            throw new IllegalArgumentException("Runtime not found: " + runtimeId);
+        }
+
+        SeamMutation mutation = new SeamBuildPlaceMutation(runtimeId, x, y, block, team, rotation, "SeamBuildService.deferPlace");
+        runtime.mutations.enqueue(mutation);
+
+        return mutation;
+    }
+
+    public SeamMutation deferPlace(SeamRuntime runtime, int x, int y, Block block, Team team, int rotation){
+        if(runtime == null){
+            throw new NullPointerException("runtime");
+        }
+
+        return deferPlace(runtime.id, x, y, block, team, rotation);
+    }
+
+    public SeamMutation deferRemove(int runtimeId, int x, int y){
+        SeamRuntime runtime = runtimes.get(runtimeId);
+
+        if(runtime == null){
+            throw new IllegalArgumentException("Runtime not found: " + runtimeId);
+        }
+
+        SeamMutation mutation = new SeamBuildRemoveMutation(runtimeId, x, y, "SeamBuildService.deferRemove");
+        runtime.mutations.enqueue(mutation);
+
+        return mutation;
+    }
+
+    public SeamMutation deferRemove(SeamRuntime runtime, int x, int y){
+        if(runtime == null){
+            throw new NullPointerException("runtime");
+        }
+
+        return deferRemove(runtime.id, x, y);
+    }
+
+    private SeamBuildResult preflight(SeamRuntime runtime, int x, int y, int tilePos, Block block, Team team, int rotation){
         if(runtime.disposed()){
             return SeamBuildResult.failure(runtime, x, y, tilePos, block, team, rotation, "runtime is disposed");
         }

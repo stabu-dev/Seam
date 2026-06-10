@@ -3,6 +3,7 @@ package seam;
 public final class SeamRuntimeUpdatePolicy{
     public final boolean enabled;
 
+    public final boolean mutations;
     public final boolean teams;
     public final boolean buildings;
     public final boolean power;
@@ -18,6 +19,7 @@ public final class SeamRuntimeUpdatePolicy{
     private SeamRuntimeUpdatePolicy(Builder builder){
         this.enabled = builder.enabled;
 
+        this.mutations = builder.mutations;
         this.teams = builder.teams;
         this.buildings = builder.buildings;
         this.power = builder.power;
@@ -40,6 +42,7 @@ public final class SeamRuntimeUpdatePolicy{
     public static SeamRuntimeUpdatePolicy buildingsOnly(){
         return builder()
         .enabled(true)
+        .mutations(true)
         .teams(true)
         .buildings(true)
         .power(true)
@@ -52,6 +55,7 @@ public final class SeamRuntimeUpdatePolicy{
     public static SeamRuntimeUpdatePolicy fullUnsafe(){
         return builder()
         .enabled(true)
+        .mutations(true)
         .teams(true)
         .buildings(true)
         .power(true)
@@ -74,6 +78,7 @@ public final class SeamRuntimeUpdatePolicy{
     public Builder copy(){
         return builder()
         .enabled(enabled)
+        .mutations(mutations)
         .teams(teams)
         .buildings(buildings)
         .power(power)
@@ -94,6 +99,7 @@ public final class SeamRuntimeUpdatePolicy{
     public String toString(){
         return "SeamRuntimeUpdatePolicy{" +
         "enabled=" + enabled +
+        ", mutations=" + mutations +
         ", teams=" + teams +
         ", buildings=" + buildings +
         ", power=" + power +
@@ -110,6 +116,7 @@ public final class SeamRuntimeUpdatePolicy{
     public static final class Builder{
         private boolean enabled = true;
 
+        private boolean mutations;
         private boolean teams;
         private boolean buildings;
         private boolean power;
@@ -124,6 +131,11 @@ public final class SeamRuntimeUpdatePolicy{
 
         public Builder enabled(boolean enabled){
             this.enabled = enabled;
+            return this;
+        }
+
+        public Builder mutations(boolean mutations){
+            this.mutations = mutations;
             return this;
         }
 

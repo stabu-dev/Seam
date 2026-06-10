@@ -21,6 +21,11 @@ public final class SeamRuntimeStepReport{
     public double stateTickBefore;
     public double stateTickAfter;
 
+    public int mutationPendingBefore;
+    public int mutationPendingAfter;
+    public int mutationApplied;
+    public int mutationFailed;
+
     public int buildCount;
     public int powerGraphCount;
     public int bulletCount;
@@ -47,6 +52,7 @@ public final class SeamRuntimeStepReport{
         frameBefore = runtime.clock.frame();
         clockTickBefore = runtime.clock.tick();
         stateTickBefore = runtime.state.tick;
+        mutationPendingBefore = runtime.mutations.size();
     }
 
     public void end(SeamRuntime runtime){
@@ -55,6 +61,7 @@ public final class SeamRuntimeStepReport{
         frameAfter = runtime.clock.frame();
         clockTickAfter = runtime.clock.tick();
         stateTickAfter = runtime.state.tick;
+        mutationPendingAfter = runtime.mutations.size();
 
         buildCount = runtime.groups.build.size();
         powerGraphCount = runtime.groups.powerGraph.size();
@@ -69,6 +76,16 @@ public final class SeamRuntimeStepReport{
 
     public void add(SeamPhaseReport phase){
         phases.add(phase);
+    }
+
+    public void recordMutations(Seq<SeamMutationResult> results){
+        mutationApplied += results.size;
+
+        for(SeamMutationResult result : results){
+            if(!result.success){
+                mutationFailed++;
+            }
+        }
     }
 
     public long durationNanos(){
@@ -99,6 +116,9 @@ public final class SeamRuntimeStepReport{
         ", frame=" + frameBefore + "->" + frameAfter +
         ", clockTick=" + clockTickBefore + "->" + clockTickAfter +
         ", stateTick=" + stateTickBefore + "->" + stateTickAfter +
+        ", mutations=" + mutationApplied +
+        ", mutationFailed=" + mutationFailed +
+        ", mutationPending=" + mutationPendingBefore + "->" + mutationPendingAfter +
         ", builds=" + buildCount +
         ", powerGraphs=" + powerGraphCount +
         ", bullets=" + bulletCount +

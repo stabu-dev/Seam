@@ -41,15 +41,7 @@ public final class SeamConfigService{
         SeamRuntime runtime = runtimes.get(runtimeId);
 
         if(runtime == null){
-            return SeamConfigResult.failure(
-            null,
-            tilePos,
-            Point2.x(tilePos),
-            Point2.y(tilePos),
-            null,
-            value,
-            "runtime not found"
-            );
+            return SeamConfigResult.failure(null, tilePos, Point2.x(tilePos), Point2.y(tilePos), null, value, "runtime not found");
         }
 
         return configure(runtime, tilePos, value);
@@ -80,34 +72,12 @@ public final class SeamConfigService{
         int y = Point2.y(tilePos);
 
         if(value == null){
-            return SeamConfigResult.failure(
-            runtime,
-            tilePos,
-            x,
-            y,
-            null,
-            null,
-            "null config values are not supported by SeamConfigService yet"
-            );
+            return SeamConfigResult.failure(runtime, tilePos, x, y, null, null, "null config values are not supported by SeamConfigService yet");
         }
 
         try{
             return executor.callRegisteredExclusive(runtime, SeamPhase.configure, active -> {
-                Tile tile = active.world.tile(x, y);
-
-                if(tile == null){
-                    return SeamConfigResult.failure(active, tilePos, x, y, null, value, "tile not found");
-                }
-
-                Building build = tile.build;
-
-                if(build == null){
-                    return SeamConfigResult.failure(active, tilePos, x, y, tile.block().name, value, "tile has no building");
-                }
-
-                build.configured(null, value);
-
-                return SeamConfigResult.success(active, tilePos, x, y, tile.block().name, value);
+                return SeamTileMutator.configure(active, tilePos, value);
             });
         }catch(Throwable throwable){
             return SeamConfigResult.failure(runtime, tilePos, x, y, null, value, throwable);
@@ -136,5 +106,42 @@ public final class SeamConfigService{
         }
 
         return configure(runtime, build.pos(), value);
+    }
+
+    public SeamMutation deferConfigureInt(int runtimeId, int tilePos, int value){
+        return deferConfigure(runtimeId, tilePos, value);
+    }
+
+    public SeamMutation deferConfigureBool(int runtimeId, int tilePos, boolean value){
+        return deferConfigure(runtimeId, tilePos, value);
+    }
+
+    public SeamMutation deferConfigureFloat(int runtimeId, int tilePos, float value){
+        return deferConfigure(runtimeId, tilePos, value);
+    }
+
+    public SeamMutation deferConfigureString(int runtimeId, int tilePos, String value){
+        return deferConfigure(runtimeId, tilePos, value);
+    }
+
+    public SeamMutation deferConfigure(int runtimeId, int tilePos, Object value){
+        SeamRuntime runtime = runtimes.get(runtimeId);
+
+        if(runtime == null){
+            throw new IllegalArgumentException("Runtime not found: " + runtimeId);
+        }
+
+        SeamMutation mutation = new SeamConfigMutation(runtimeId, tilePos, value, "SeamConfigService.deferConfigure");
+        runtime.mutations.enqueue(mutation);
+
+        return mutation;
+    }
+
+    public SeamMutation deferConfigure(SeamRuntime runtime, int tilePos, Object value){
+        if(runtime == null){
+            throw new NullPointerException("runtime");
+        }
+
+        return deferConfigure(runtime.id, tilePos, value);
     }
 }

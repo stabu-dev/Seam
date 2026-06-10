@@ -163,6 +163,14 @@ public final class SeamEngine{
                 return null;
             });
 
+            if(policy.mutations){
+                run(runtime, SeamPhase.updateMutations, report, active -> {
+                    Seq<SeamMutationResult> results = active.mutations.drain(active);
+                    report.recordMutations(results);
+                    return null;
+                });
+            }
+
             if(policy.teams){
                 run(runtime, SeamPhase.updateTeams, report, active -> {
                     active.state.teams.updateTeamStats();

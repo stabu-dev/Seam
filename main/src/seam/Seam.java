@@ -12,6 +12,7 @@ public class Seam extends Mod{
     public static final SeamEngine engine = new SeamEngine(runtimes, stack, executor);
     public static final SeamConfigService config = new SeamConfigService(runtimes, executor);
     public static final SeamBuildService builds = new SeamBuildService(runtimes, executor);
+    public static final SeamQueryService query = new SeamQueryService(runtimes, executor);
 
     public static SeamRuntime mainRuntime;
 
