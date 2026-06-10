@@ -7,12 +7,15 @@ import mindustry.gen.*;
 public final class SeamEngine{
     private final SeamRuntimeRegistry runtimes;
     private final SeamRuntimeStack stack;
+    private final SeamRuntimeExecutor executor;
 
     private boolean enabled = true;
     private boolean automatic = true;
     private boolean validateAfterStep = true;
 
-    public SeamEngine(SeamRuntimeRegistry runtimes, SeamRuntimeStack stack){
+    private SeamStepReport lastReport;
+
+    public SeamEngine(SeamRuntimeRegistry runtimes, SeamRuntimeStack stack, SeamRuntimeExecutor executor){
         if(runtimes == null){
             throw new NullPointerException("runtimes");
         }
@@ -21,8 +24,13 @@ public final class SeamEngine{
             throw new NullPointerException("stack");
         }
 
+        if(executor == null){
+            throw new NullPointerException("executor");
+        }
+
         this.runtimes = runtimes;
         this.stack = stack;
+        this.executor = executor;
     }
 
     public boolean enabled(){
@@ -49,150 +57,218 @@ public final class SeamEngine{
         this.validateAfterStep = validateAfterStep;
     }
 
-    public void update(){
-        if(!automatic){
-            return;
-        }
-
-        if(!SeamLifecycle.mainWorldReady()){
-            return;
-        }
-
-        step();
+    public SeamStepReport lastReport(){
+        return lastReport;
     }
 
-    public void step(){
-        if(!enabled){
-            return;
+    public SeamStepReport update(){
+        if(!automatic){
+            SeamStepReport report = new SeamStepReport();
+            report.skip("automatic updates are disabled");
+            lastReport = report;
+            return report;
         }
 
         if(!SeamLifecycle.mainWorldReady()){
-            throw new IllegalStateException("Cannot step SeamEngine: main world is not ready.");
+            SeamStepReport report = new SeamStepReport();
+            report.skip("main world is not ready");
+            lastReport = report;
+            return report;
+        }
+
+        return step();
+    }
+
+    public SeamStepReport step(){
+        SeamStepReport report = new SeamStepReport();
+        lastReport = report;
+
+        if(!enabled){
+            report.skip("engine is disabled");
+            return report;
+        }
+
+        if(!SeamLifecycle.mainWorldReady()){
+            IllegalStateException exception = new IllegalStateException("Cannot step SeamEngine: main world is not ready.");
+            report.fail(exception);
+            throw exception;
         }
 
         if(stack.active()){
-            throw new IllegalStateException("Cannot step SeamEngine while a runtime context is already active.");
+            IllegalStateException exception = new IllegalStateException("Cannot step SeamEngine while a runtime context is already active.");
+            report.fail(exception);
+            throw exception;
         }
 
-        Seq<SeamRuntime> copy = runtimes.all();
+        try{
+            Seq<SeamRuntime> copy = runtimes.all();
 
-        for(SeamRuntime runtime : copy){
-            if(!runtime.updateEnabled()){
-                continue;
+            for(SeamRuntime runtime : copy){
+                if(!runtime.updateEnabled()){
+                    continue;
+                }
+
+                SeamRuntimeStepReport runtimeReport = updateRuntime(runtime);
+                report.add(runtimeReport);
             }
 
-            updateRuntime(runtime);
-        }
+            if(validateAfterStep){
+                SeamRuntimeValidator.validateRestoredToMain(runtimes, stack);
+            }
 
-        if(validateAfterStep){
-            SeamRuntimeValidator.validateRestoredToMain(runtimes, stack);
+            report.finish();
+            return report;
+        }catch(Throwable throwable){
+            report.fail(throwable);
+            throw throwable;
         }
     }
 
-    public void step(int amount){
+    public SeamStepReport step(int amount){
         if(amount < 0){
             throw new IllegalArgumentException("Step amount cannot be negative.");
         }
 
+        SeamStepReport report = null;
+
         for(int i = 0; i < amount; i++){
-            step();
+            report = step();
         }
+
+        if(report == null){
+            report = new SeamStepReport();
+            report.skip("zero steps requested");
+            lastReport = report;
+        }
+
+        return report;
     }
 
-    private void updateRuntime(SeamRuntime runtime){
+    private SeamRuntimeStepReport updateRuntime(SeamRuntime runtime){
         runtime.requireWorldReady();
 
         if(runtime.validateOnUpdate()){
             SeamRuntimeValidator.validateRuntime(runtime, false);
         }
 
+        SeamRuntimeStepReport report = new SeamRuntimeStepReport(runtime);
+        report.begin(runtime);
+
         SeamRuntimeUpdatePolicy policy = runtime.updatePolicy();
 
-        run(runtime, SeamPhase.updatePre, () -> {
-            runtime.state.tick++;
-        });
-
-        if(policy.teams){
-            run(runtime, SeamPhase.updateTeams, () -> {
-                runtime.state.teams.updateTeamStats();
+        try{
+            run(runtime, SeamPhase.updatePre, report, active -> {
+                active.clock.advance(Time.delta);
+                active.state.tick += active.clock.delta();
+                return null;
             });
-        }
 
-        if(policy.buildings){
-            run(runtime, SeamPhase.updateBuildings, () -> {
-                Groups.build.update();
-            });
-        }
-
-        if(policy.power){
-            run(runtime, SeamPhase.updatePower, () -> {
-                Groups.powerGraph.update();
-            });
-        }
-
-        if(policy.puddles){
-            run(runtime, SeamPhase.updatePuddles, () -> {
-                Groups.puddle.update();
-            });
-        }
-
-        if(policy.fires){
-            run(runtime, SeamPhase.updateFires, () -> {
-                Groups.fire.update();
-            });
-        }
-
-        if(policy.weather){
-            run(runtime, SeamPhase.updateWeather, () -> {
-                Groups.weather.update();
-            });
-        }
-
-        if(policy.bullets){
-            run(runtime, SeamPhase.updateBullets, () -> {
-                Groups.bullet.update();
-            });
-        }
-
-        if(policy.units){
-            run(runtime, SeamPhase.updateUnits, () -> {
-                Groups.unit.update();
-            });
-        }
-
-        if(policy.sync){
-            run(runtime, SeamPhase.updateSync, () -> {
-                Groups.sync.update();
-            });
-        }
-
-        if(policy.draw){
-            run(runtime, SeamPhase.updateDraw, () -> {
-                Groups.draw.update();
-            });
-        }
-
-        run(runtime, SeamPhase.updatePost, () -> {
-            if(runtime.validateOnUpdate()){
-                SeamRuntimeValidator.validateActiveContext(runtime);
+            if(policy.teams){
+                run(runtime, SeamPhase.updateTeams, report, active -> {
+                    active.state.teams.updateTeamStats();
+                    return null;
+                });
             }
-        });
+
+            if(policy.buildings){
+                run(runtime, SeamPhase.updateBuildings, report, active -> {
+                    Groups.build.update();
+                    return null;
+                });
+            }
+
+            if(policy.power){
+                run(runtime, SeamPhase.updatePower, report, active -> {
+                    Groups.powerGraph.update();
+                    return null;
+                });
+            }
+
+            if(policy.puddles){
+                run(runtime, SeamPhase.updatePuddles, report, active -> {
+                    Groups.puddle.update();
+                    return null;
+                });
+            }
+
+            if(policy.fires){
+                run(runtime, SeamPhase.updateFires, report, active -> {
+                    Groups.fire.update();
+                    return null;
+                });
+            }
+
+            if(policy.weather){
+                run(runtime, SeamPhase.updateWeather, report, active -> {
+                    Groups.weather.update();
+                    return null;
+                });
+            }
+
+            if(policy.bullets){
+                run(runtime, SeamPhase.updateBullets, report, active -> {
+                    Groups.bullet.update();
+                    return null;
+                });
+            }
+
+            if(policy.units){
+                run(runtime, SeamPhase.updateUnits, report, active -> {
+                    Groups.unit.update();
+                    return null;
+                });
+            }
+
+            if(policy.sync){
+                run(runtime, SeamPhase.updateSync, report, active -> {
+                    Groups.sync.update();
+                    return null;
+                });
+            }
+
+            if(policy.draw){
+                run(runtime, SeamPhase.updateDraw, report, active -> {
+                    Groups.draw.update();
+                    return null;
+                });
+            }
+
+            run(runtime, SeamPhase.updatePost, report, active -> {
+                if(active.validateOnUpdate()){
+                    SeamRuntimeValidator.validateActiveContext(active);
+                }
+
+                return null;
+            });
+
+            return report;
+        }finally{
+            report.end(runtime);
+        }
     }
 
-    private void run(SeamRuntime runtime, SeamPhase phase, Runnable action){
-        stack.enter(runtime, phase);
+    private void run(
+    SeamRuntime runtime,
+    SeamPhase phase,
+    SeamRuntimeStepReport runtimeReport,
+    SeamRuntimeCallable<Void> action
+    ){
+        SeamPhaseReport phaseReport = new SeamPhaseReport(phase);
+        runtimeReport.add(phaseReport);
+
+        phaseReport.begin();
 
         try{
-            if(runtime.validateOnUpdate()){
-                SeamRuntimeValidator.validateActiveContext(runtime);
-            }
-
-            action.run();
+            executor.call(runtime, phase, active -> {
+                action.call(active);
+                return null;
+            });
         }catch(Throwable throwable){
+            phaseReport.fail(throwable);
             Log.err("Seam runtime update failed. Runtime: @, phase: @", runtime, phase);
             throw throwable;
         }finally{
-            stack.exit();
+            phaseReport.end();
         }
     }
 }

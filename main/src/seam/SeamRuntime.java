@@ -13,6 +13,7 @@ public final class SeamRuntime{
     public final GameState state;
     public final SeamGroupSet groups;
     public final EntityCollisions collisions;
+    public final SeamClock clock;
 
     private SeamRuntimeStatus status = SeamRuntimeStatus.created;
 
@@ -35,6 +36,7 @@ public final class SeamRuntime{
         this.state = new GameState();
         this.groups = new SeamGroupSet(config.width, config.height);
         this.collisions = new EntityCollisions();
+        this.clock = new SeamClock();
 
         loadEmptyWorld(config.width, config.height);
     }
@@ -59,6 +61,7 @@ public final class SeamRuntime{
     GameState state,
     SeamGroupSet groups,
     EntityCollisions collisions,
+    SeamClock clock,
     SeamRuntimeUpdatePolicy updatePolicy
     ){
         this.id = id;
@@ -68,6 +71,7 @@ public final class SeamRuntime{
         this.state = state;
         this.groups = groups;
         this.collisions = collisions;
+        this.clock = clock;
         this.updatePolicy = updatePolicy;
         this.status = SeamRuntimeStatus.loaded;
     }
@@ -81,6 +85,7 @@ public final class SeamRuntime{
         Vars.state,
         SeamGroupSet.wrapCurrent(),
         Vars.collisions,
+        new SeamClock(),
         SeamRuntimeUpdatePolicy.disabled()
         );
     }
@@ -95,6 +100,7 @@ public final class SeamRuntime{
         }
 
         groups.resize(width, height);
+        clock.reset();
 
         setStatus(SeamRuntimeStatus.loaded);
     }
@@ -183,6 +189,7 @@ public final class SeamRuntime{
         }
 
         groups.clear();
+        clock.reset();
         status = SeamRuntimeStatus.disposed;
         updatePolicy = updatePolicy.withEnabled(false);
     }
@@ -198,6 +205,7 @@ public final class SeamRuntime{
         ", name='" + name + '\'' +
         ", kind=" + kind +
         ", status=" + status +
+        ", clock=" + clock +
         ", updatePolicy=" + updatePolicy +
         '}';
     }

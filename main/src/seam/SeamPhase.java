@@ -19,6 +19,10 @@ public enum SeamPhase{
     updateDraw,
     updatePost,
 
+    buildPlace,
+    buildRemove,
+    configure,
+
     renderPrepare,
     renderWorld,
     renderEntities,

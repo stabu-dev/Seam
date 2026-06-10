@@ -8,7 +8,10 @@ import mindustry.mod.*;
 public class Seam extends Mod{
     public static final SeamRuntimeStack stack = new SeamRuntimeStack();
     public static final SeamRuntimeRegistry runtimes = new SeamRuntimeRegistry();
-    public static final SeamEngine engine = new SeamEngine(runtimes, stack);
+    public static final SeamRuntimeExecutor executor = new SeamRuntimeExecutor(runtimes, stack);
+    public static final SeamEngine engine = new SeamEngine(runtimes, stack, executor);
+    public static final SeamConfigService config = new SeamConfigService(runtimes, executor);
+    public static final SeamBuildService builds = new SeamBuildService(runtimes, executor);
 
     public static SeamRuntime mainRuntime;
 
