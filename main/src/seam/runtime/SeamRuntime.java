@@ -4,10 +4,13 @@ import seam.core.*;
 import seam.entities.*;
 import seam.runtime.mutations.*;
 import seam.graphics.invalidation.*;
+import seam.runtime.services.*;
 import seam.runtime.update.*;
 import mindustry.*;
+import mindustry.ai.*;
 import mindustry.core.*;
 import mindustry.entities.*;
+import mindustry.game.*;
 
 public final class SeamRuntime{
     public enum Kind{
@@ -30,6 +33,14 @@ public final class SeamRuntime{
     public final GameState state;
     public final SeamGroupSet groups;
     public final EntityCollisions collisions;
+    public final Waves waves;
+    public final WaveSpawner spawner;
+    public final BlockIndexer indexer;
+    public final Pathfinder pathfinder;
+    public final ControlPathfinder controlPath;
+    public final SeamBlockIndexer index;
+    public final SeamPathfinder pathing;
+    public final SeamWaveSpawner waveSpawner;
     public final SeamClock clock;
     public final SeamMutationQueue mutations;
     public final SeamRenderInvalidationQueue renderInvalidation;
@@ -55,6 +66,15 @@ public final class SeamRuntime{
         this.state = new GameState();
         this.groups = new SeamGroupSet(config.width, config.height);
         this.collisions = new EntityCollisions();
+        this.waves = new Waves();
+        this.spawner = Vars.spawner;
+        this.index = new SeamBlockIndexer(this);
+        this.indexer = this.index;
+
+        this.pathing = new SeamPathfinder(this);
+        this.pathfinder = Vars.pathfinder;
+        this.controlPath = Vars.controlPath;
+        this.waveSpawner = new SeamWaveSpawner(this);
         this.clock = new SeamClock();
         this.mutations = new SeamMutationQueue();
         this.renderInvalidation = new SeamRenderInvalidationQueue();
@@ -82,6 +102,14 @@ public final class SeamRuntime{
     GameState state,
     SeamGroupSet groups,
     EntityCollisions collisions,
+    Waves waves,
+    WaveSpawner spawner,
+    BlockIndexer indexer,
+    Pathfinder pathfinder,
+    ControlPathfinder controlPath,
+    SeamBlockIndexer index,
+    SeamPathfinder pathing,
+    SeamWaveSpawner waveSpawner,
     SeamClock clock,
     SeamMutationQueue mutations,
     SeamRenderInvalidationQueue renderInvalidation,
@@ -94,6 +122,14 @@ public final class SeamRuntime{
         this.state = state;
         this.groups = groups;
         this.collisions = collisions;
+        this.waves = waves;
+        this.spawner = spawner;
+        this.indexer = indexer;
+        this.pathfinder = pathfinder;
+        this.controlPath = controlPath;
+        this.index = index;
+        this.pathing = pathing;
+        this.waveSpawner = waveSpawner;
         this.clock = clock;
         this.mutations = mutations;
         this.renderInvalidation = renderInvalidation;
@@ -110,6 +146,14 @@ public final class SeamRuntime{
         Vars.state,
         SeamGroupSet.wrapCurrent(),
         Vars.collisions,
+        Vars.waves,
+        Vars.spawner,
+        Vars.indexer,
+        Vars.pathfinder,
+        Vars.controlPath,
+        null,
+        null,
+        null,
         new SeamClock(),
         new SeamMutationQueue(),
         new SeamRenderInvalidationQueue(),
@@ -127,12 +171,12 @@ public final class SeamRuntime{
         }
 
         groups.resize(width, height);
+        setStatus(Status.loaded);
+        rebuildWorldServices();
         clock.reset();
         mutations.clear();
         renderInvalidation.clear();
         renderInvalidation.markFull();
-
-        setStatus(Status.loaded);
     }
 
     public Status status(){
@@ -153,6 +197,20 @@ public final class SeamRuntime{
 
     public boolean worldReady(){
         return SeamLifecycle.worldReady(world);
+    }
+
+    public void rebuildWorldServices(){
+        if(index != null){
+            index.rebuild();
+        }
+
+        if(pathing != null){
+            pathing.rebuild();
+        }
+
+        if(waveSpawner != null){
+            waveSpawner.reset();
+        }
     }
 
     public SeamRuntimeUpdatePolicy updatePolicy(){

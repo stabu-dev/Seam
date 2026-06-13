@@ -5,6 +5,11 @@ public final class SeamRuntimeUpdatePolicy{
 
     public final boolean mutations;
     public final boolean teams;
+    public final boolean logic;
+    public final boolean waves;
+    public final boolean objectives;
+    public final boolean ai;
+    public final boolean environment;
     public final boolean buildings;
     public final boolean power;
     public final boolean puddles;
@@ -21,6 +26,11 @@ public final class SeamRuntimeUpdatePolicy{
 
         this.mutations = builder.mutations;
         this.teams = builder.teams;
+        this.logic = builder.logic;
+        this.waves = builder.waves;
+        this.objectives = builder.objectives;
+        this.ai = builder.ai;
+        this.environment = builder.environment;
         this.buildings = builder.buildings;
         this.power = builder.power;
         this.puddles = builder.puddles;
@@ -54,6 +64,7 @@ public final class SeamRuntimeUpdatePolicy{
         .enabled(true)
         .mutations(true)
         .teams(true)
+        .environment(true)
         .buildings(true)
         .power(true)
         .build();
@@ -64,6 +75,11 @@ public final class SeamRuntimeUpdatePolicy{
         .enabled(true)
         .mutations(true)
         .teams(true)
+        .logic(true)
+        .waves(true)
+        .objectives(true)
+        .ai(true)
+        .environment(true)
         .buildings(true)
         .power(true)
         .puddles(true)
@@ -91,6 +107,26 @@ public final class SeamRuntimeUpdatePolicy{
 
     public boolean buildings(){
         return buildings;
+    }
+
+    public boolean logic(){
+        return logic;
+    }
+
+    public boolean waves(){
+        return waves;
+    }
+
+    public boolean objectives(){
+        return objectives;
+    }
+
+    public boolean ai(){
+        return ai;
+    }
+
+    public boolean environment(){
+        return environment;
     }
 
     public boolean power(){
@@ -135,6 +171,26 @@ public final class SeamRuntimeUpdatePolicy{
 
     public boolean updateTeams(){
         return enabled && teams;
+    }
+
+    public boolean updateLogic(){
+        return enabled && logic;
+    }
+
+    public boolean updateWaves(){
+        return enabled && waves;
+    }
+
+    public boolean updateObjectives(){
+        return enabled && objectives;
+    }
+
+    public boolean updateAi(){
+        return enabled && ai;
+    }
+
+    public boolean updateEnvironment(){
+        return enabled && environment;
     }
 
     public boolean updateBuildings(){
@@ -188,6 +244,11 @@ public final class SeamRuntimeUpdatePolicy{
         .enabled(enabled)
         .mutations(mutations)
         .teams(teams)
+        .logic(logic)
+        .waves(waves)
+        .objectives(objectives)
+        .ai(ai)
+        .environment(environment)
         .buildings(buildings)
         .power(power)
         .puddles(puddles)
@@ -206,6 +267,11 @@ public final class SeamRuntimeUpdatePolicy{
         "enabled=" + enabled +
         ", mutations=" + mutations +
         ", teams=" + teams +
+        ", logic=" + logic +
+        ", waves=" + waves +
+        ", objectives=" + objectives +
+        ", ai=" + ai +
+        ", environment=" + environment +
         ", buildings=" + buildings +
         ", power=" + power +
         ", puddles=" + puddles +
@@ -224,6 +290,11 @@ public final class SeamRuntimeUpdatePolicy{
 
         private boolean mutations;
         private boolean teams;
+        private boolean logic;
+        private boolean waves;
+        private boolean objectives;
+        private boolean ai;
+        private boolean environment;
         private boolean buildings;
         private boolean power;
         private boolean puddles;
@@ -250,6 +321,31 @@ public final class SeamRuntimeUpdatePolicy{
 
         public Builder teams(boolean teams){
             this.teams = teams;
+            return this;
+        }
+
+        public Builder logic(boolean logic){
+            this.logic = logic;
+            return this;
+        }
+
+        public Builder waves(boolean waves){
+            this.waves = waves;
+            return this;
+        }
+
+        public Builder objectives(boolean objectives){
+            this.objectives = objectives;
+            return this;
+        }
+
+        public Builder ai(boolean ai){
+            this.ai = ai;
+            return this;
+        }
+
+        public Builder environment(boolean environment){
+            this.environment = environment;
             return this;
         }
 

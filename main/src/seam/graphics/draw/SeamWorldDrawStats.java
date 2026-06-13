@@ -16,6 +16,10 @@ public final class SeamWorldDrawStats{
     public int shadowMasksPrepared;
     public int staticShadowsDrawn;
 
+    public int darknessTilesDrawn;
+    public int darknessPasses;
+    public int darknessDraws;
+
     public int tilesVisited;
     public int blocksDrawn;
     public int customShadowsDrawn;
@@ -25,10 +29,14 @@ public final class SeamWorldDrawStats{
 
     public int drawEntitiesQueued;
     public int drawEntityDuplicatesSkipped;
+    public int weatherDrawn;
 
     public int lightsQueued;
     public int lightPasses;
     public int lightsSkipped;
+    public int staticLightsQueued;
+    public int dynamicLightsCaptured;
+    public int dynamicLightRunsCaptured;
 
     public int bloomCaptures;
     public int bloomRenders;
@@ -63,6 +71,10 @@ public final class SeamWorldDrawStats{
         shadowMasksPrepared = 0;
         staticShadowsDrawn = 0;
 
+        darknessTilesDrawn = 0;
+        darknessPasses = 0;
+        darknessDraws = 0;
+
         tilesVisited = 0;
         blocksDrawn = 0;
         customShadowsDrawn = 0;
@@ -72,10 +84,14 @@ public final class SeamWorldDrawStats{
 
         drawEntitiesQueued = 0;
         drawEntityDuplicatesSkipped = 0;
+        weatherDrawn = 0;
 
         lightsQueued = 0;
         lightPasses = 0;
         lightsSkipped = 0;
+        staticLightsQueued = 0;
+        dynamicLightsCaptured = 0;
+        dynamicLightRunsCaptured = 0;
 
         bloomCaptures = 0;
         bloomRenders = 0;
@@ -127,6 +143,10 @@ public final class SeamWorldDrawStats{
         copy.shadowMasksPrepared = shadowMasksPrepared;
         copy.staticShadowsDrawn = staticShadowsDrawn;
 
+        copy.darknessTilesDrawn = darknessTilesDrawn;
+        copy.darknessPasses = darknessPasses;
+        copy.darknessDraws = darknessDraws;
+
         copy.tilesVisited = tilesVisited;
         copy.blocksDrawn = blocksDrawn;
         copy.customShadowsDrawn = customShadowsDrawn;
@@ -136,10 +156,14 @@ public final class SeamWorldDrawStats{
 
         copy.drawEntitiesQueued = drawEntitiesQueued;
         copy.drawEntityDuplicatesSkipped = drawEntityDuplicatesSkipped;
+        copy.weatherDrawn = weatherDrawn;
 
         copy.lightsQueued = lightsQueued;
         copy.lightPasses = lightPasses;
         copy.lightsSkipped = lightsSkipped;
+        copy.staticLightsQueued = staticLightsQueued;
+        copy.dynamicLightsCaptured = dynamicLightsCaptured;
+        copy.dynamicLightRunsCaptured = dynamicLightRunsCaptured;
 
         copy.bloomCaptures = bloomCaptures;
         copy.bloomRenders = bloomRenders;
@@ -167,6 +191,9 @@ public final class SeamWorldDrawStats{
         ", floorMeshesDrawn=" + floorMeshesDrawn +
         ", shadowMasksPrepared=" + shadowMasksPrepared +
         ", staticShadowsDrawn=" + staticShadowsDrawn +
+        ", darknessTilesDrawn=" + darknessTilesDrawn +
+        ", darknessPasses=" + darknessPasses +
+        ", darknessDraws=" + darknessDraws +
         ", tilesVisited=" + tilesVisited +
         ", blocksDrawn=" + blocksDrawn +
         ", customShadowsDrawn=" + customShadowsDrawn +
@@ -175,9 +202,13 @@ public final class SeamWorldDrawStats{
         ", statusDrawn=" + statusDrawn +
         ", drawEntitiesQueued=" + drawEntitiesQueued +
         ", drawEntityDuplicatesSkipped=" + drawEntityDuplicatesSkipped +
+        ", weatherDrawn=" + weatherDrawn +
         ", lightsQueued=" + lightsQueued +
         ", lightPasses=" + lightPasses +
         ", lightsSkipped=" + lightsSkipped +
+        ", staticLightsQueued=" + staticLightsQueued +
+        ", dynamicLightsCaptured=" + dynamicLightsCaptured +
+        ", dynamicLightRunsCaptured=" + dynamicLightRunsCaptured +
         ", bloomCaptures=" + bloomCaptures +
         ", bloomRenders=" + bloomRenders +
         ", animatedShieldPasses=" + animatedShieldPasses +

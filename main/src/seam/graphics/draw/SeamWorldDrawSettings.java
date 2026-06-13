@@ -14,6 +14,8 @@ public final class SeamWorldDrawSettings{
     public boolean drawStatus = true;
 
     public boolean drawDrawEntities = true;
+    public boolean drawWeather = true;
+    public boolean drawDarkness = true;
 
     public boolean drawLights = false;
     public boolean drawBloom = true;
@@ -41,6 +43,8 @@ public final class SeamWorldDrawSettings{
         copy.drawStatus = drawStatus;
 
         copy.drawDrawEntities = drawDrawEntities;
+        copy.drawWeather = drawWeather;
+        copy.drawDarkness = drawDarkness;
 
         copy.drawLights = drawLights;
         copy.drawBloom = drawBloom;
@@ -67,6 +71,8 @@ public final class SeamWorldDrawSettings{
         ", drawTeamOverlays=" + drawTeamOverlays +
         ", drawStatus=" + drawStatus +
         ", drawDrawEntities=" + drawDrawEntities +
+        ", drawWeather=" + drawWeather +
+        ", drawDarkness=" + drawDarkness +
         ", drawLights=" + drawLights +
         ", drawBloom=" + drawBloom +
         ", drawAnimatedShields=" + drawAnimatedShields +

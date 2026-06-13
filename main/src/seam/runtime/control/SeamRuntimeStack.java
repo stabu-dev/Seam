@@ -7,8 +7,10 @@ import arc.graphics.*;
 import arc.struct.*;
 import arc.util.*;
 import mindustry.*;
+import mindustry.ai.*;
 import mindustry.core.*;
 import mindustry.entities.*;
+import mindustry.game.*;
 import mindustry.gen.*;
 
 import java.lang.reflect.*;
@@ -58,6 +60,11 @@ public final class SeamRuntimeStack{
         Vars.world = runtime.world;
         Vars.state = runtime.state;
         Vars.collisions = runtime.collisions;
+        Vars.waves = runtime.waves;
+        Vars.spawner = runtime.spawner;
+        Vars.indexer = runtime.indexer;
+        Vars.pathfinder = runtime.pathfinder;
+        Vars.controlPath = runtime.controlPath;
 
         Groups.all = runtime.groups.all;
         Groups.player = runtime.groups.player;
@@ -126,6 +133,11 @@ public final class SeamRuntimeStack{
         private final World world;
         private final GameState state;
         private final EntityCollisions collisions;
+        private final Waves waves;
+        private final WaveSpawner spawner;
+        private final BlockIndexer indexer;
+        private final Pathfinder pathfinder;
+        private final ControlPathfinder controlPath;
 
         private final EntityGroup<Entityc> all;
         private final EntityGroup<Player> player;
@@ -153,6 +165,11 @@ public final class SeamRuntimeStack{
             this.world = Vars.world;
             this.state = Vars.state;
             this.collisions = Vars.collisions;
+            this.waves = Vars.waves;
+            this.spawner = Vars.spawner;
+            this.indexer = Vars.indexer;
+            this.pathfinder = Vars.pathfinder;
+            this.controlPath = Vars.controlPath;
 
             this.all = Groups.all;
             this.player = Groups.player;
@@ -199,6 +216,11 @@ public final class SeamRuntimeStack{
             Vars.world = world;
             Vars.state = state;
             Vars.collisions = collisions;
+            Vars.waves = waves;
+            Vars.spawner = spawner;
+            Vars.indexer = indexer;
+            Vars.pathfinder = pathfinder;
+            Vars.controlPath = controlPath;
 
             Groups.all = all;
             Groups.player = player;
@@ -349,7 +371,8 @@ public final class SeamRuntimeStack{
                 runsField = Time.class.getDeclaredField("runs");
                 runsField.setAccessible(true);
 
-                finishField = Time.DelayRun.class.getDeclaredField("finish");
+                Class<?> delayRunType = Class.forName("arc.util.Time$DelayRun");
+                finishField = delayRunType.getDeclaredField("finish");
                 finishField.setAccessible(true);
 
                 reflectionReady = true;
@@ -368,7 +391,7 @@ public final class SeamRuntimeStack{
 
             loggedFailure = true;
 
-            Log.err("[Seam] Failed to bind Arc Time.run delayed task to Seam runtime context. Delayed vanilla turret shots may leak into the main runtime.");
+            Log.err("[Seam] Failed to bind Arc Time.run delayed task to Seam runtime context. Delayed vanilla tasks may leak into the main runtime.");
             Log.err(throwable);
         }
     }

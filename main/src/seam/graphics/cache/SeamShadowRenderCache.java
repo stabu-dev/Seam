@@ -1,5 +1,6 @@
 package seam.graphics.cache;
 
+import arc.math.*;
 import seam.graphics.invalidation.*;
 import seam.graphics.view.*;
 import seam.runtime.*;
@@ -10,7 +11,6 @@ import arc.graphics.*;
 import arc.graphics.Texture.*;
 import arc.graphics.g2d.*;
 import arc.graphics.gl.*;
-import arc.math.*;
 import arc.math.geom.*;
 import arc.struct.*;
 import arc.util.*;
@@ -33,7 +33,8 @@ public final class SeamShadowRenderCache{
     private final Mat previousTransform = new Mat();
     private final Mat identityTransform = new Mat();
 
-    private final Rect runtimeBounds = new Rect();
+    private final Rect visibleRuntimeBounds = new Rect();
+    private final Rect drawRuntimeBounds = new Rect();
 
     private boolean built;
     private boolean disposed;
@@ -119,11 +120,6 @@ public final class SeamShadowRenderCache{
 
         int viewerTeamId = viewerTeam == null ? -1 : viewerTeam.id;
 
-        /*
-         * This is the reliable invalidation path.
-         * Subworld mutations often happen with world.setGenerating(true), so vanilla TileChangeEvent is deliberately suppressed.
-         * The runtime world counters are the canonical signal that the shadow buffer cannot be trusted anymore.
-         */
         if(lastTileChanges != runtime.world.tileChanges || lastFloorChanges != runtime.world.floorChanges){
             built = false;
             shadowEvents.clear();
@@ -264,35 +260,126 @@ public final class SeamShadowRenderCache{
     }
 
     private void drawShadowBuffer(SeamView view, Rect hostBounds){
-        view.projection().runtimeBounds(runtime, hostBounds, Vars.tilesize * 3f, runtimeBounds);
+        /*
+         * Keep the grow here so shadows close to the visible edge are present,
+         * but never use the grown rect directly for the final FBO composite.
+         * Otherwise UVs go outside [0..1] near map edges and clamp-to-edge
+         * stretches boundary shadow texels outside the runtime map.
+         */
+        view.projection().runtimeBounds(runtime, hostBounds, Vars.tilesize * 3f, visibleRuntimeBounds);
 
-        if(runtimeBounds.width <= 0f || runtimeBounds.height <= 0f){
+        if(visibleRuntimeBounds.width <= 0f || visibleRuntimeBounds.height <= 0f){
             return;
         }
 
-        float ww = runtime.world.width() * Vars.tilesize;
-        float wh = runtime.world.height() * Vars.tilesize;
+        if(!computeDrawBounds(visibleRuntimeBounds, drawRuntimeBounds)){
+            return;
+        }
 
-        float x = runtimeBounds.x + runtimeBounds.width / 2f + Vars.tilesize / 2f;
-        float y = runtimeBounds.y + runtimeBounds.height / 2f + Vars.tilesize / 2f;
+        drawWithCleanStencil(
+        () -> {
+            Draw.color(Color.white);
 
-        float u = (x - runtimeBounds.width / 2f) / ww;
-        float v = (y - runtimeBounds.height / 2f) / wh;
-        float u2 = (x + runtimeBounds.width / 2f) / ww;
-        float v2 = (y + runtimeBounds.height / 2f) / wh;
+            /*
+             * Visual map extent, matching the half-tile FBO alignment used by vanilla:
+             * tile centers are x*tilesize / y*tilesize, so the first visible tile starts
+             * at -tilesize/2, not 0.
+             */
+            Fill.crect(
+            -Vars.tilesize / 2f,
+            -Vars.tilesize / 2f,
+            runtime.world.unitWidth(),
+            runtime.world.unitHeight()
+            );
 
-        Tmp.tr1.set(shadows.getTexture());
-        Tmp.tr1.set(u, v2, u2, v);
+            Draw.color();
+        },
+        () -> withRuntimeCamera(drawRuntimeBounds, () -> {
+            Draw.shader(Shaders.darkness);
 
-        Draw.shader(Shaders.darkness);
-        Draw.rect(
-        Tmp.tr1,
-        runtimeBounds.x + runtimeBounds.width / 2f,
-        runtimeBounds.y + runtimeBounds.height / 2f,
-        runtimeBounds.width,
-        runtimeBounds.height
+            Draw.fbo(
+            shadows.getTexture(),
+            runtime.world.width(),
+            runtime.world.height(),
+            Vars.tilesize,
+            Vars.tilesize / 2f
+            );
+
+            Draw.shader();
+        })
         );
-        Draw.shader();
+    }
+
+    private boolean computeDrawBounds(Rect visible, Rect out){
+        float half = Vars.tilesize / 2f;
+
+        float minX = -half;
+        float minY = -half;
+        float maxX = runtime.world.unitWidth() - half;
+        float maxY = runtime.world.unitHeight() - half;
+
+        float x1 = Math.max(minX, visible.x - half);
+        float y1 = Math.max(minY, visible.y - half);
+        float x2 = Math.min(maxX, visible.x + visible.width + half);
+        float y2 = Math.min(maxY, visible.y + visible.height + half);
+
+        if(x2 <= x1 || y2 <= y1){
+            return false;
+        }
+
+        out.set(x1, y1, x2 - x1, y2 - y1);
+        return true;
+    }
+
+    private void withRuntimeCamera(Rect bounds, Runnable draw){
+        Camera camera = Core.camera;
+
+        if(camera == null || draw == null){
+            return;
+        }
+
+        float previousX = camera.position.x;
+        float previousY = camera.position.y;
+        float previousWidth = camera.width;
+        float previousHeight = camera.height;
+
+        try{
+            camera.position.set(bounds.x + bounds.width / 2f, bounds.y + bounds.height / 2f);
+            camera.width = bounds.width;
+            camera.height = bounds.height;
+            camera.update();
+
+            draw.run();
+        }finally{
+            camera.position.set(previousX, previousY);
+            camera.width = previousWidth;
+            camera.height = previousHeight;
+            camera.update();
+        }
+    }
+
+    private void drawWithCleanStencil(Runnable stencil, Runnable contents){
+        clearStencil();
+
+        try{
+            Draw.beginStencil();
+            stencil.run();
+
+            Draw.beginStenciled();
+            contents.run();
+        }finally{
+            Draw.endStencil();
+            clearStencil();
+        }
+    }
+
+    private void clearStencil(){
+        Draw.flush();
+
+        Gl.stencilMask(0xFF);
+        Gl.clearStencil(0);
+        Gl.clear(Gl.stencilBufferBit);
+        Gl.disable(Gl.stencilTest);
     }
 
     private void beginFramebufferDraw(Color clearColor){

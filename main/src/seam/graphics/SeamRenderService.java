@@ -161,6 +161,14 @@ public final class SeamRenderService{
     }
 
     public SeamFloorDrawResult drawFloor(int viewId, Rect hostBounds){
+        return drawFloor(viewId, hostBounds, false);
+    }
+
+    public SeamFloorDrawResult drawWallLayer(int viewId, Rect hostBounds){
+        return drawFloor(viewId, hostBounds, true);
+    }
+
+    private SeamFloorDrawResult drawFloor(int viewId, Rect hostBounds, boolean wallsOnly){
         if(hostBounds == null){
             return SeamFloorDrawResult.failure(-1, viewId, "host bounds is null");
         }
@@ -179,6 +187,8 @@ public final class SeamRenderService{
 
         syncRuntime(runtime.id);
 
-        return floorCache(runtime.id).draw(view, hostBounds);
+        SeamFloorRenderCache cache = floorCache(runtime.id);
+
+        return wallsOnly ? cache.drawWalls(view, hostBounds) : cache.draw(view, hostBounds);
     }
 }

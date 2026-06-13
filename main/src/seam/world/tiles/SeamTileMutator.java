@@ -4,6 +4,7 @@ import seam.runtime.*;
 import seam.world.construction.*;
 import seam.world.config.*;
 import seam.world.terrain.*;
+import seam.runtime.services.*;
 import arc.math.geom.*;
 import mindustry.*;
 import mindustry.content.*;
@@ -59,6 +60,7 @@ public final class SeamTileMutator{
             runtime.world.tileChanges++;
 
             addIndexerEntries(runtime, tile);
+            updatePathing(runtime, tile);
             updateProximity(runtime, tile);
 
             runtime.renderInvalidation.blockChanged(runtime, x, y, previous, tile.block());
@@ -106,6 +108,7 @@ public final class SeamTileMutator{
             runtime.world.tileChanges++;
 
             addIndexerEntries(runtime, tile);
+            updatePathing(runtime, tile);
             updateProximity(runtime, tile);
 
             runtime.renderInvalidation.blockChanged(runtime, x, y, previous, tile.block());
@@ -124,10 +127,6 @@ public final class SeamTileMutator{
 
         if(runtime == null){
             throw new NullPointerException("runtime");
-        }
-
-        if(value == null){
-            return SeamConfigResult.failure(runtime, tilePos, x, y, null, null, "null config values are not supported");
         }
 
         if(!runtime.worldReady()){
@@ -269,7 +268,7 @@ public final class SeamTileMutator{
     }
 
     private static void removeIndexerEntries(SeamRuntime runtime, Tile tile){
-        if(runtime == null || tile == null || Vars.indexer == null){
+        if(runtime == null || tile == null || runtime.index == null){
             return;
         }
 
@@ -282,18 +281,18 @@ public final class SeamTileMutator{
                 Tile center = tile.build.tile;
 
                 if(center != null && owns(runtime, center)){
-                    Vars.indexer.removeIndex(center);
+                    runtime.index.removeIndex(center);
                     return;
                 }
             }
 
-            Vars.indexer.removeIndex(tile);
+            runtime.index.removeIndex(tile);
         }catch(Throwable ignored){
         }
     }
 
     private static void addIndexerEntries(SeamRuntime runtime, Tile tile){
-        if(runtime == null || tile == null || Vars.indexer == null){
+        if(runtime == null || tile == null || runtime.index == null){
             return;
         }
 
@@ -306,18 +305,18 @@ public final class SeamTileMutator{
                 Tile center = tile.build.tile;
 
                 if(center != null && owns(runtime, center)){
-                    Vars.indexer.addIndex(center);
+                    runtime.index.addIndex(center);
                     return;
                 }
             }
 
-            Vars.indexer.addIndex(tile);
+            runtime.index.addIndex(tile);
         }catch(Throwable ignored){
         }
     }
 
     private static void updateFloorIndexer(SeamRuntime runtime, Tile tile, Floor previous, Floor current){
-        if(runtime == null || tile == null || Vars.indexer == null){
+        if(runtime == null || tile == null || runtime.index == null){
             return;
         }
 
@@ -332,8 +331,14 @@ public final class SeamTileMutator{
          * for vanilla consumers without emitting global events.
          */
         try{
-            Vars.indexer.removeIndex(tile);
-            Vars.indexer.addIndex(tile);
+            runtime.index.removeFloorIndex(tile, previous);
+            runtime.index.addFloorIndex(tile, current);
+            runtime.index.removeIndex(tile);
+            runtime.index.addIndex(tile);
+
+            if(runtime.pathing != null){
+                runtime.pathing.updateTile(tile);
+            }
         }catch(Throwable ignored){
         }
     }
@@ -364,6 +369,17 @@ public final class SeamTileMutator{
             if(other != null && other.build != null){
                 other.build.updateProximity();
             }
+        }
+    }
+
+    private static void updatePathing(SeamRuntime runtime, Tile tile){
+        if(runtime == null || tile == null || runtime.pathing == null){
+            return;
+        }
+
+        try{
+            runtime.pathing.updateTile(tile);
+        }catch(Throwable ignored){
         }
     }
 }

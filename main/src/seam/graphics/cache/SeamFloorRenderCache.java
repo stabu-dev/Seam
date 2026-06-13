@@ -150,6 +150,14 @@ public final class SeamFloorRenderCache{
     }
 
     public SeamFloorDrawResult draw(SeamView view, Rect hostBounds){
+        return draw(view, hostBounds, false);
+    }
+
+    public SeamFloorDrawResult drawWalls(SeamView view, Rect hostBounds){
+        return draw(view, hostBounds, true);
+    }
+
+    private SeamFloorDrawResult draw(SeamView view, Rect hostBounds, boolean wallsOnly){
         if(view == null){
             throw new NullPointerException("view");
         }
@@ -209,7 +217,9 @@ public final class SeamFloorRenderCache{
                 ChunkMesh[] chunk = cache[x][y];
 
                 for(int i = 0; i < layers; i++){
-                    if(i < chunk.length && chunk[i] != null && i != CacheLayer.walls.id && chunk[i].bounds.overlaps(runtimeBounds)){
+                    boolean drawLayer = wallsOnly ? i == CacheLayer.walls.id : i != CacheLayer.walls.id;
+
+                    if(i < chunk.length && chunk[i] != null && drawLayer && chunk[i].bounds.overlaps(runtimeBounds)){
                         drawnLayerSet.add(i);
                     }
                 }
