@@ -19,10 +19,6 @@ public final class SeamGroupSet{
     public final EntityGroup<PowerGraphUpdaterc> powerGraph;
 
     public SeamGroupSet(int width, int height){
-        float finalWorldBounds = Vars.finalWorldBounds;
-        float w = width * Vars.tilesize + finalWorldBounds * 2f;
-        float h = height * Vars.tilesize + finalWorldBounds * 2f;
-
         all = new SeamEntityGroup<>(Entityc.class, false, false);
         player = new SeamEntityGroup<>(Player.class, false, true);
         bullet = new SeamEntityGroup<>(Bullet.class, true, false);
@@ -37,51 +33,6 @@ public final class SeamGroupSet{
         powerGraph = new SeamEntityGroup<>(PowerGraphUpdaterc.class, false, false);
 
         resize(width, height);
-    }
-
-    private SeamGroupSet(
-    EntityGroup<Entityc> all,
-    EntityGroup<Player> player,
-    EntityGroup<Bullet> bullet,
-    EntityGroup<Unit> unit,
-    EntityGroup<Building> build,
-    EntityGroup<Syncc> sync,
-    EntityGroup<Drawc> draw,
-    EntityGroup<Fire> fire,
-    EntityGroup<Puddle> puddle,
-    EntityGroup<WeatherState> weather,
-    EntityGroup<WorldLabel> label,
-    EntityGroup<PowerGraphUpdaterc> powerGraph
-    ){
-        this.all = all;
-        this.player = player;
-        this.bullet = bullet;
-        this.unit = unit;
-        this.build = build;
-        this.sync = sync;
-        this.draw = draw;
-        this.fire = fire;
-        this.puddle = puddle;
-        this.weather = weather;
-        this.label = label;
-        this.powerGraph = powerGraph;
-    }
-
-    public static SeamGroupSet wrapCurrent(){
-        return new SeamGroupSet(
-        Groups.all,
-        Groups.player,
-        Groups.bullet,
-        Groups.unit,
-        Groups.build,
-        Groups.sync,
-        Groups.draw,
-        Groups.fire,
-        Groups.puddle,
-        Groups.weather,
-        Groups.label,
-        Groups.powerGraph
-        );
     }
 
     public void resize(int width, int height){

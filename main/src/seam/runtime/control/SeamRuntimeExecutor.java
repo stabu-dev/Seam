@@ -10,21 +10,21 @@ public final class SeamRuntimeExecutor{
     }
 
     private final SeamRuntimeRegistry runtimes;
-    private final SeamRuntimeStack stack;
+    private final SeamStateInstaller installer;
 
     private boolean validateAccess = true;
 
-    public SeamRuntimeExecutor(SeamRuntimeRegistry runtimes, SeamRuntimeStack stack){
+    public SeamRuntimeExecutor(SeamRuntimeRegistry runtimes, SeamStateInstaller installer){
         if(runtimes == null){
             throw new NullPointerException("runtimes");
         }
 
-        if(stack == null){
-            throw new NullPointerException("stack");
+        if(installer == null){
+            throw new NullPointerException("installer");
         }
 
         this.runtimes = runtimes;
-        this.stack = stack;
+        this.installer = installer;
     }
 
     public boolean validateAccess(){
@@ -50,16 +50,22 @@ public final class SeamRuntimeExecutor{
 
         runtime.requireWorldReady();
 
-        stack.enter(runtime, phase);
+        installer.install(runtime, phase);
 
         try{
             if(validateAccess){
                 SeamRuntimeValidator.validateActiveContext(runtime);
             }
 
-            return task.run(runtime);
+            T result = task.run(runtime);
+
+            if(validateAccess){
+                SeamRuntimeValidator.validateActiveContext(runtime);
+            }
+
+            return result;
         }finally{
-            stack.exit();
+            installer.restore();
         }
     }
 
@@ -90,8 +96,8 @@ public final class SeamRuntimeExecutor{
     }
 
     public void requireExclusive(){
-        if(stack.active()){
-            throw new IllegalStateException("Cannot perform exclusive Seam runtime operation while runtime stack is active.");
+        if(installer.active()){
+            throw new IllegalStateException("Cannot perform exclusive Seam runtime operation while a runtime state is installed.");
         }
     }
 }

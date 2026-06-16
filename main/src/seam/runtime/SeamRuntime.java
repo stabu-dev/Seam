@@ -1,23 +1,21 @@
 package seam.runtime;
 
-import seam.core.*;
-import seam.entities.*;
-import seam.runtime.mutations.*;
-import seam.graphics.invalidation.*;
-import seam.runtime.services.*;
-import seam.runtime.update.*;
+import arc.graphics.*;
+import arc.struct.*;
 import mindustry.*;
-import mindustry.ai.*;
+import mindustry.async.*;
 import mindustry.core.*;
+import mindustry.core.GameState.*;
 import mindustry.entities.*;
 import mindustry.game.*;
+import mindustry.gen.*;
+import mindustry.maps.*;
+import mindustry.mod.*;
+import mindustry.type.*;
+import mindustry.world.blocks.*;
+import seam.entities.*;
 
 public final class SeamRuntime{
-    public enum Kind{
-        main,
-        subworld
-    }
-
     public enum Status{
         created,
         loading,
@@ -27,59 +25,44 @@ public final class SeamRuntime{
 
     public final int id;
     public final String name;
-    public final Kind kind;
+    public final int initialWidth;
+    public final int initialHeight;
 
     public final World world;
     public final GameState state;
     public final SeamGroupSet groups;
     public final EntityCollisions collisions;
     public final Waves waves;
-    public final WaveSpawner spawner;
-    public final BlockIndexer indexer;
-    public final Pathfinder pathfinder;
-    public final ControlPathfinder controlPath;
-    public final SeamBlockIndexer index;
-    public final SeamPathfinder pathing;
-    public final SeamWaveSpawner waveSpawner;
-    public final SeamClock clock;
-    public final SeamMutationQueue mutations;
-    public final SeamRenderInvalidationQueue renderInvalidation;
+    public final Player player;
+
+    public PhysicsProcess physics;
+    public AvoidanceProcess avoidance;
+    public final Seq<AsyncProcess> asyncProcesses = new Seq<>();
+
+    public float cameraX;
+    public float cameraY;
+    public float cameraWidth;
+    public float cameraHeight;
 
     private Status status = Status.created;
-
-    private SeamRuntimeUpdatePolicy updatePolicy;
-    private boolean validateOnUpdate = true;
+    private Status statusBeforeLoad = Status.created;
 
     public SeamRuntime(SeamRuntimeConfig config){
         config.validate();
 
-        if(config.kind == Kind.main){
-            throw new IllegalArgumentException("Main runtime must be created with wrapCurrentMain().");
-        }
+        id = config.id;
+        name = config.name;
+        initialWidth = config.width;
+        initialHeight = config.height;
 
-        this.id = config.id;
-        this.name = config.name;
-        this.kind = config.kind;
-        this.updatePolicy = config.updatePolicy;
+        world = new World();
+        state = new GameState();
+        groups = new SeamGroupSet(config.width, config.height);
+        collisions = new EntityCollisions();
+        waves = new Waves();
+        player = createRuntimePlayer();
 
-        this.world = new World();
-        this.state = new GameState();
-        this.groups = new SeamGroupSet(config.width, config.height);
-        this.collisions = new EntityCollisions();
-        this.waves = new Waves();
-        this.spawner = Vars.spawner;
-        this.index = new SeamBlockIndexer(this);
-        this.indexer = this.index;
-
-        this.pathing = new SeamPathfinder(this);
-        this.pathfinder = Vars.pathfinder;
-        this.controlPath = Vars.controlPath;
-        this.waveSpawner = new SeamWaveSpawner(this);
-        this.clock = new SeamClock();
-        this.mutations = new SeamMutationQueue();
-        this.renderInvalidation = new SeamRenderInvalidationQueue();
-
-        loadEmptyWorld(config.width, config.height);
+        resetCameraToSize(config.width, config.height);
     }
 
     public SeamRuntime(int id, String name, int width, int height){
@@ -88,95 +71,8 @@ public final class SeamRuntime{
         .id(id)
         .name(name)
         .size(width, height)
-        .kind(Kind.subworld)
-        .updatePolicy(SeamRuntimeUpdatePolicy.buildingsOnly())
         .build()
         );
-    }
-
-    private SeamRuntime(
-    int id,
-    String name,
-    Kind kind,
-    World world,
-    GameState state,
-    SeamGroupSet groups,
-    EntityCollisions collisions,
-    Waves waves,
-    WaveSpawner spawner,
-    BlockIndexer indexer,
-    Pathfinder pathfinder,
-    ControlPathfinder controlPath,
-    SeamBlockIndexer index,
-    SeamPathfinder pathing,
-    SeamWaveSpawner waveSpawner,
-    SeamClock clock,
-    SeamMutationQueue mutations,
-    SeamRenderInvalidationQueue renderInvalidation,
-    SeamRuntimeUpdatePolicy updatePolicy
-    ){
-        this.id = id;
-        this.name = name;
-        this.kind = kind;
-        this.world = world;
-        this.state = state;
-        this.groups = groups;
-        this.collisions = collisions;
-        this.waves = waves;
-        this.spawner = spawner;
-        this.indexer = indexer;
-        this.pathfinder = pathfinder;
-        this.controlPath = controlPath;
-        this.index = index;
-        this.pathing = pathing;
-        this.waveSpawner = waveSpawner;
-        this.clock = clock;
-        this.mutations = mutations;
-        this.renderInvalidation = renderInvalidation;
-        this.updatePolicy = updatePolicy;
-        this.status = Status.loaded;
-    }
-
-    public static SeamRuntime wrapCurrentMain(){
-        return new SeamRuntime(
-        0,
-        "main",
-        Kind.main,
-        Vars.world,
-        Vars.state,
-        SeamGroupSet.wrapCurrent(),
-        Vars.collisions,
-        Vars.waves,
-        Vars.spawner,
-        Vars.indexer,
-        Vars.pathfinder,
-        Vars.controlPath,
-        null,
-        null,
-        null,
-        new SeamClock(),
-        new SeamMutationQueue(),
-        new SeamRenderInvalidationQueue(),
-        SeamRuntimeUpdatePolicy.disabled()
-        );
-    }
-
-    private void loadEmptyWorld(int width, int height){
-        setStatus(Status.loading);
-
-        world.resize(width, height);
-
-        if(world.tiles != null){
-            world.tiles.fill();
-        }
-
-        groups.resize(width, height);
-        setStatus(Status.loaded);
-        rebuildWorldServices();
-        clock.reset();
-        mutations.clear();
-        renderInvalidation.clear();
-        renderInvalidation.markFull();
     }
 
     public Status status(){
@@ -191,63 +87,155 @@ public final class SeamRuntime{
         return status == Status.loaded;
     }
 
-    public boolean main(){
-        return kind == Kind.main;
+    public boolean loading(){
+        return status == Status.loading;
+    }
+
+    public boolean created(){
+        return status == Status.created;
     }
 
     public boolean worldReady(){
-        return SeamLifecycle.worldReady(world);
+        return status == Status.loaded
+        && world != null
+        && world.tiles != null
+        && world.tiles.width > 0
+        && world.tiles.height > 0;
     }
 
-    public void rebuildWorldServices(){
-        if(index != null){
-            index.rebuild();
+    public void resetCamera(){
+        resetCameraToSize(world.width(), world.height());
+    }
+
+    public void resetCameraToSize(int width, int height){
+        cameraX = width * Vars.tilesize / 2f;
+        cameraY = height * Vars.tilesize / 2f;
+        cameraWidth = Math.max(width * Vars.tilesize, Vars.tilesize);
+        cameraHeight = Math.max(height * Vars.tilesize, Vars.tilesize);
+    }
+
+    public void setCamera(float x, float y, float width, float height){
+        if(width <= 0f || height <= 0f){
+            throw new IllegalArgumentException("Runtime camera size must be positive.");
         }
 
-        if(pathing != null){
-            pathing.rebuild();
+        cameraX = x;
+        cameraY = y;
+        cameraWidth = width;
+        cameraHeight = height;
+    }
+
+    public void captureCamera(Camera camera){
+        if(camera == null){
+            return;
         }
 
-        if(waveSpawner != null){
-            waveSpawner.reset();
+        cameraX = camera.position.x;
+        cameraY = camera.position.y;
+
+        if(camera.width > 0f){
+            cameraWidth = camera.width;
+        }
+
+        if(camera.height > 0f){
+            cameraHeight = camera.height;
         }
     }
 
-    public SeamRuntimeUpdatePolicy updatePolicy(){
-        return updatePolicy;
-    }
-
-    public void updatePolicy(SeamRuntimeUpdatePolicy updatePolicy){
-        if(updatePolicy == null){
-            throw new NullPointerException("updatePolicy");
+    public void applyCamera(Camera camera){
+        if(camera == null){
+            return;
         }
 
-        if(main() && updatePolicy.enabled){
-            throw new IllegalStateException("Main runtime cannot be updated by SeamEngine.");
+        if(cameraWidth <= 0f || cameraHeight <= 0f){
+            resetCamera();
         }
 
-        this.updatePolicy = updatePolicy;
+        camera.position.x = cameraX;
+        camera.position.y = cameraY;
+        camera.width = cameraWidth;
+        camera.height = cameraHeight;
+        camera.update();
     }
 
-    public boolean updateEnabled(){
-        return updatePolicy.enabled && loaded() && !main();
+    public void beginLoad(){
+        requireAlive();
+
+        if(status == Status.loading){
+            throw new IllegalStateException("Runtime '" + name + "' is already loading.");
+        }
+
+        statusBeforeLoad = status;
+        status = Status.loading;
     }
 
-    public void updateEnabled(boolean updateEnabled){
-        updatePolicy(updatePolicy.withEnabled(updateEnabled));
+    public void prepareForStateLoad(){
+        requireLoading();
+
+        groups.clear();
+        resetStateForLoad();
+        resetRuntimePlayer();
+        resetAsyncProcesses();
     }
 
-    public boolean validateOnUpdate(){
-        return validateOnUpdate;
+    public void completeLoad(){
+        requireLoading();
+
+        resetCamera();
+        status = Status.loaded;
+        statusBeforeLoad = Status.loaded;
     }
 
-    public void validateOnUpdate(boolean validateOnUpdate){
-        this.validateOnUpdate = validateOnUpdate;
+    public void failLoad(){
+        if(status == Status.loading){
+            status = statusBeforeLoad == null ? Status.created : statusBeforeLoad;
+        }
+    }
+
+    public void ensureAsyncProcessesForInstalledContext(){
+        requireWorldReady();
+
+        boolean rebuild = physics == null
+        || avoidance == null
+        || asyncProcesses.size != 2
+        || !asyncProcesses.contains(process -> process == physics)
+        || !asyncProcesses.contains(process -> process == avoidance);
+
+        if(rebuild){
+            resetAsyncProcesses();
+
+            physics = new PhysicsProcess();
+            avoidance = new AvoidanceProcess();
+
+            asyncProcesses.clear();
+            asyncProcesses.add(physics);
+            asyncProcesses.add(avoidance);
+        }
+
+        for(AsyncProcess process : asyncProcesses){
+            process.init();
+        }
     }
 
     public void requireAlive(){
         if(disposed()){
             throw new IllegalStateException("Runtime '" + name + "' is disposed.");
+        }
+    }
+
+    public void requireLoadable(){
+        requireAlive();
+
+        if(status == Status.loading){
+            throw new IllegalStateException("Runtime '" + name + "' is already loading.");
+        }
+    }
+
+    public void requireLoading(){
+        requireAlive();
+
+        if(status != Status.loading){
+            throw new IllegalStateException("Runtime '" + name + "' is not loading. Current status: " + status);
         }
     }
 
@@ -268,24 +256,89 @@ public final class SeamRuntime{
     }
 
     public void dispose(){
-        if(main()){
-            throw new IllegalStateException("Main runtime cannot be disposed.");
-        }
-
         if(status == Status.disposed){
             return;
         }
 
         groups.clear();
-        clock.reset();
-        mutations.clear();
-        renderInvalidation.clear();
+
+        if(player.isAdded()){
+            player.remove();
+        }
+
+        resetAsyncProcesses();
+
         status = Status.disposed;
-        updatePolicy = updatePolicy.withEnabled(false);
+        statusBeforeLoad = Status.disposed;
     }
 
-    private void setStatus(Status status){
-        this.status = status;
+    private Player createRuntimePlayer(){
+        Player created = Player.create();
+        Player host = Vars.player;
+
+        if(host != null){
+            created.name = host.name;
+            created.locale = host.locale;
+            created.color.set(host.color);
+            created.admin = host.admin;
+            created.team(host.team());
+        }else{
+            created.team(Team.sharded);
+        }
+
+        return created;
+    }
+
+    private void resetRuntimePlayer(){
+        if(player.isAdded()){
+            player.remove();
+        }
+
+        player.reset();
+
+        Player host = Vars.player;
+
+        if(host != null && host != player){
+            player.name = host.name;
+            player.locale = host.locale;
+            player.color.set(host.color);
+            player.admin = host.admin;
+            player.team(host.team());
+        }else{
+            player.team(Team.sharded);
+        }
+    }
+
+    private void resetAsyncProcesses(){
+        for(AsyncProcess process : asyncProcesses){
+            process.reset();
+        }
+
+        asyncProcesses.clear();
+        physics = null;
+        avoidance = null;
+    }
+
+    private void resetStateForLoad(){
+        state.wave = 1;
+        state.wavetime = 0f;
+        state.tick = 0;
+        state.updateId = 0;
+        state.gameOver = false;
+        state.afterGameOver = false;
+        state.won = false;
+        state.serverTps = -1;
+        state.map = Vars.emptyMap;
+        state.rules = new Rules();
+        state.stats = new GameStats();
+        state.markers = new MapMarkers();
+        state.mapLocales = new MapLocales();
+        state.envAttrs = new Attributes();
+        state.teams = new Teams();
+        state.patcher = new DataPatcher();
+        state.enemies = 0;
+        state.playtestingMap = null;
+        state.set(State.menu);
     }
 
     @Override
@@ -293,10 +346,7 @@ public final class SeamRuntime{
         return "SeamRuntime{" +
         "id=" + id +
         ", name='" + name + '\'' +
-        ", kind=" + kind +
         ", status=" + status +
-        ", clock=" + clock +
-        ", updatePolicy=" + updatePolicy +
         '}';
     }
 }

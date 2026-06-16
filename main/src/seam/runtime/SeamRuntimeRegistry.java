@@ -1,20 +1,36 @@
 package seam.runtime;
 
-import seam.runtime.control.*;
 import arc.struct.*;
 
 public final class SeamRuntimeRegistry{
     private final IntMap<SeamRuntime> byId = new IntMap<>();
-    private final Seq<SeamRuntime> runtimes = new Seq<>();
+    private final Seq<SeamRuntime> ordered = new Seq<>();
 
-    private SeamRuntime main;
+    public SeamRuntime create(SeamRuntimeConfig config){
+        if(config == null){
+            throw new NullPointerException("config");
+        }
 
-    public SeamRuntime main(){
-        return main;
+        return register(new SeamRuntime(config));
     }
 
-    public Seq<SeamRuntime> all(){
-        return runtimes.copy();
+    public SeamRuntime register(SeamRuntime runtime){
+        if(runtime == null){
+            throw new NullPointerException("runtime");
+        }
+
+        if(runtime.disposed()){
+            throw new IllegalArgumentException("Cannot register disposed runtime: " + runtime);
+        }
+
+        if(byId.containsKey(runtime.id)){
+            throw new IllegalArgumentException("Runtime id is already registered: " + runtime.id);
+        }
+
+        byId.put(runtime.id, runtime);
+        ordered.add(runtime);
+
+        return runtime;
     }
 
     public SeamRuntime get(int id){
@@ -25,79 +41,39 @@ public final class SeamRuntimeRegistry{
         return byId.containsKey(id);
     }
 
-    public void refreshMain(){
-        SeamRuntime refreshedMain = SeamRuntime.wrapCurrentMain();
-
-        SeamRuntimeValidator.validateRuntime(refreshedMain, false);
-
-        if(main != null){
-            byId.remove(main.id);
-            runtimes.remove(main, true);
-        }
-
-        main = refreshedMain;
-
-        byId.put(main.id, main);
-        runtimes.add(main);
-
-        SeamRuntimeValidator.validateRegistry(this);
+    public boolean contains(SeamRuntime runtime){
+        return runtime != null && byId.get(runtime.id) == runtime;
     }
 
-    public SeamRuntime create(SeamRuntimeConfig config){
-        config.validate();
+    public Seq<SeamRuntime> all(){
+        return ordered;
+    }
 
-        if(config.kind == SeamRuntime.Kind.main){
-            throw new IllegalArgumentException("Main runtime is managed by refreshMain().");
+    public int size(){
+        return ordered.size;
+    }
+
+    public boolean empty(){
+        return ordered.isEmpty();
+    }
+
+    public SeamRuntime remove(int id){
+        SeamRuntime runtime = byId.remove(id);
+
+        if(runtime != null){
+            ordered.remove(runtime, true);
+            runtime.dispose();
         }
-
-        if(config.id == 0){
-            throw new IllegalArgumentException("Runtime id 0 is reserved for main runtime.");
-        }
-
-        if(byId.containsKey(config.id)){
-            throw new IllegalArgumentException("Runtime id already exists: " + config.id);
-        }
-
-        SeamRuntime runtime = new SeamRuntime(config);
-
-        SeamRuntimeValidator.validateRuntime(runtime, true);
-
-        byId.put(runtime.id, runtime);
-        runtimes.add(runtime);
-
-        SeamRuntimeValidator.validateRegistry(this);
 
         return runtime;
     }
 
-    public void remove(int id){
-        SeamRuntime runtime = byId.get(id);
-
-        if(runtime == null){
-            return;
+    public void clear(){
+        for(SeamRuntime runtime : ordered){
+            runtime.dispose();
         }
 
-        if(runtime.main()){
-            throw new IllegalStateException("Main runtime cannot be removed.");
-        }
-
-        byId.remove(id);
-        runtimes.remove(runtime, true);
-
-        runtime.dispose();
-
-        SeamRuntimeValidator.validateRegistry(this);
-    }
-
-    public void clearSubworlds(){
-        Seq<SeamRuntime> copy = runtimes.copy();
-
-        for(SeamRuntime runtime : copy){
-            if(!runtime.main()){
-                remove(runtime.id);
-            }
-        }
-
-        SeamRuntimeValidator.validateRegistry(this);
+        byId.clear();
+        ordered.clear();
     }
 }

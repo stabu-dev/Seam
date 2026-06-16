@@ -1,38 +1,14 @@
 package seam.core;
 
 public enum SeamPhase{
-    bootstrap,
-
     load,
-    save,
-
-    updatePre,
-    updateMutations,
-    updateTeams,
-    updateLogic,
-    updateAi,
-    updateObjectives,
-    updateWaves,
-    updateEnvironment,
-    updateGroups,
-    updateBuildings,
-    updatePower,
-    updateDelayed,
-    updatePost,
-
-    buildPlace,
-    buildRemove,
-    configure,
-
-    renderPrepare,
-    renderWorld,
-    renderEntities,
-    renderDebug,
-
+    update,
+    mutation,
+    render,
     input,
-    networkRead,
-    networkWrite,
-
+    event,
+    delayed,
+    save,
     validate,
-    manual
+    process
 }
