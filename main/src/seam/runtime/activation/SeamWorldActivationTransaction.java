@@ -1,7 +1,6 @@
 package seam.runtime.activation;
 
 import arc.*;
-import mindustry.*;
 import mindustry.game.EventType.*;
 import seam.core.*;
 import seam.runtime.*;
@@ -15,6 +14,8 @@ public final class SeamWorldActivationTransaction{
     private SeamHostContext.Snapshot hostSnapshot;
     private boolean switching;
     private Thread switchingThread;
+    private boolean scoped;
+    private Thread scopedThread;
 
     public SeamWorldActivationTransaction(SeamHostContext host, SeamStateInstaller installer){
         if(host == null){
@@ -35,6 +36,10 @@ public final class SeamWorldActivationTransaction{
 
     public boolean switching(){
         return switching;
+    }
+
+    public boolean scoped(){
+        return scoped;
     }
 
     public SeamRuntime activeRuntime(){
@@ -109,11 +114,154 @@ public final class SeamWorldActivationTransaction{
         }
     }
 
+    public void runIn(SeamRuntime runtime, Runnable task){
+        if(runtime == null){
+            throw new NullPointerException("runtime");
+        }
+
+        if(task == null){
+            throw new NullPointerException("task");
+        }
+
+        SeamRuntime previousRuntime = activeRuntime;
+
+        if(previousRuntime == runtime){
+            task.run();
+            return;
+        }
+
+        activate(runtime);
+
+        try{
+            task.run();
+        }finally{
+            if(previousRuntime == null){
+                activateHost();
+            }else{
+                activate(previousRuntime);
+            }
+        }
+    }
+
+    public void runInHost(Runnable task){
+        if(task == null){
+            throw new NullPointerException("task");
+        }
+
+        SeamRuntime previousRuntime = activeRuntime;
+
+        if(previousRuntime == null){
+            task.run();
+            return;
+        }
+
+        activateHost();
+
+        try{
+            task.run();
+        }finally{
+            activate(previousRuntime);
+        }
+    }
+
+    public void runScopedIn(SeamRuntime runtime, Runnable task){
+        if(runtime == null){
+            throw new NullPointerException("runtime");
+        }
+
+        if(task == null){
+            throw new NullPointerException("task");
+        }
+
+        runtime.requireWorldReady();
+
+        SeamRuntime previousRuntime = activeRuntime;
+
+        if(previousRuntime == runtime){
+            task.run();
+            return;
+        }
+
+        beginScope();
+
+        SeamHostContext.Snapshot previousHost = null;
+
+        try{
+            if(previousRuntime == null){
+                previousHost = new SeamHostContext.Snapshot();
+            }else{
+                previousRuntime.captureCamera(Core.camera);
+            }
+
+            installRuntime(runtime);
+            activeRuntime = runtime;
+            SeamRuntimeValidator.validateActiveContext(runtime);
+
+            task.run();
+
+            SeamRuntimeValidator.validateActiveContext(runtime);
+        }finally{
+            runtime.captureCamera(Core.camera);
+
+            if(previousRuntime == null){
+                activeRuntime = null;
+
+                if(previousHost != null){
+                    previousHost.restore();
+                }else if(host.captured()){
+                    host.restore();
+                }
+            }else{
+                installRuntime(previousRuntime);
+                activeRuntime = previousRuntime;
+            }
+
+            endScope();
+        }
+    }
+
+    public void runScopedInHost(Runnable task){
+        if(task == null){
+            throw new NullPointerException("task");
+        }
+
+        SeamRuntime previousRuntime = activeRuntime;
+
+        if(previousRuntime == null){
+            task.run();
+            return;
+        }
+
+        beginScope();
+
+        try{
+            previousRuntime.captureCamera(Core.camera);
+
+            if(hostSnapshot != null){
+                hostSnapshot.restore();
+            }else if(host.captured()){
+                host.restore();
+            }
+
+            activeRuntime = null;
+
+            task.run();
+
+            hostSnapshot = new SeamHostContext.Snapshot();
+        }finally{
+            installRuntime(previousRuntime);
+            activeRuntime = previousRuntime;
+            endScope();
+        }
+    }
+
     public void clear(){
         activeRuntime = null;
         hostSnapshot = null;
         switching = false;
         switchingThread = null;
+        scoped = false;
+        scopedThread = null;
     }
 
     private void installRuntime(SeamRuntime runtime){
@@ -162,6 +310,10 @@ public final class SeamWorldActivationTransaction{
             throw new IllegalStateException("A Seam world activation transaction is already running.");
         }
 
+        if(scoped){
+            throw new IllegalStateException("Cannot activate a Seam world while a scoped runtime context is active.");
+        }
+
         if(installer.active()){
             throw new IllegalStateException("Cannot activate a Seam world while a runtime state installer transaction is active.");
         }
@@ -177,5 +329,31 @@ public final class SeamWorldActivationTransaction{
 
         switching = false;
         switchingThread = null;
+    }
+
+    private void beginScope(){
+        if(scoped){
+            throw new IllegalStateException("A scoped Seam runtime context is already active.");
+        }
+
+        if(switching){
+            throw new IllegalStateException("Cannot enter a scoped Seam runtime context while activation is switching.");
+        }
+
+        if(installer.active()){
+            throw new IllegalStateException("Cannot enter a scoped Seam runtime context while installer is active.");
+        }
+
+        scoped = true;
+        scopedThread = Thread.currentThread();
+    }
+
+    private void endScope(){
+        if(Thread.currentThread() != scopedThread){
+            throw new IllegalStateException("A scoped Seam runtime context can only end on the thread that started it.");
+        }
+
+        scoped = false;
+        scopedThread = null;
     }
 }

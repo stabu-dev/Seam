@@ -6,6 +6,7 @@ import seam.core.*;
 import seam.runtime.*;
 import seam.runtime.activation.*;
 import seam.runtime.control.*;
+import seam.runtime.delayed.*;
 import seam.runtime.load.*;
 import seam.runtime.mutation.*;
 import seam.runtime.update.*;
@@ -19,6 +20,7 @@ public class Seam extends Mod{
     public static final SeamRuntimeExecutor executor = services.executor;
     public static final SeamRuntimeStateLoader stateLoader = services.stateLoader;
     public static final SeamWorldActivationTransaction activation = services.activation;
+    public static final SeamRuntimeDelayedRuns delayed = services.delayed;
     public static final SeamRuntimeUpdateTransaction update = services.update;
     public static final SeamRuntimeUpdatePipeline updatePipeline = services.updatePipeline;
     public static final SeamRuntimeMutationTransaction mutation = services.mutation;

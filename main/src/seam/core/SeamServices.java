@@ -5,6 +5,7 @@ import mindustry.game.EventType.*;
 import seam.runtime.*;
 import seam.runtime.activation.*;
 import seam.runtime.control.*;
+import seam.runtime.delayed.*;
 import seam.runtime.load.*;
 import seam.runtime.mutation.*;
 import seam.runtime.update.*;
@@ -16,6 +17,7 @@ public final class SeamServices{
     public final SeamRuntimeExecutor executor = new SeamRuntimeExecutor(runtimes, installer);
     public final SeamRuntimeStateLoader stateLoader = new SeamRuntimeStateLoader();
     public final SeamWorldActivationTransaction activation = new SeamWorldActivationTransaction(host, installer);
+    public final SeamRuntimeDelayedRuns delayed = new SeamRuntimeDelayedRuns(activation);
     public final SeamRuntimePhaseGuard phaseGuard = new SeamRuntimePhaseGuard(activation, installer);
     public final SeamRuntimeUpdateTransaction update = new SeamRuntimeUpdateTransaction(phaseGuard);
     public final SeamRuntimeUpdatePipeline updatePipeline = new SeamRuntimeUpdatePipeline(update);
@@ -43,6 +45,7 @@ public final class SeamServices{
             installer.abort();
         }
 
+        delayed.clear();
         activation.clear();
         runtimes.clear();
         host.captureCurrent();
