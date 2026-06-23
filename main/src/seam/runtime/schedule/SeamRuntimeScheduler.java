@@ -11,12 +11,14 @@ public final class SeamRuntimeScheduler{
     private final SeamWorldActivationTransaction activation;
     private final SeamRuntimeUpdatePipeline updatePipeline;
     private final SeamRuntimeEventQueue runtimeEvents;
+    private final SeamRuntimeFrameClock frameClock;
     private final Seq<RuntimeProfile> profiles = new Seq<>();
 
     private boolean active;
     private Thread activeThread;
     private long tick;
-    private float lastDelta;
+    private float lastStateDelta;
+    private float lastTimeDelta;
     private long lastTotalNanos;
     private int lastEventCount;
     private long lastEventNanos;
@@ -25,7 +27,8 @@ public final class SeamRuntimeScheduler{
     SeamRuntimeRegistry runtimes,
     SeamWorldActivationTransaction activation,
     SeamRuntimeUpdatePipeline updatePipeline,
-    SeamRuntimeEventQueue runtimeEvents
+    SeamRuntimeEventQueue runtimeEvents,
+    SeamRuntimeFrameClock frameClock
     ){
         if(runtimes == null){
             throw new NullPointerException("runtimes");
@@ -43,10 +46,15 @@ public final class SeamRuntimeScheduler{
             throw new NullPointerException("runtimeEvents");
         }
 
+        if(frameClock == null){
+            throw new NullPointerException("frameClock");
+        }
+
         this.runtimes = runtimes;
         this.activation = activation;
         this.updatePipeline = updatePipeline;
         this.runtimeEvents = runtimeEvents;
+        this.frameClock = frameClock;
     }
 
     public boolean active(){
@@ -58,7 +66,15 @@ public final class SeamRuntimeScheduler{
     }
 
     public float lastDelta(){
-        return lastDelta;
+        return lastStateDelta;
+    }
+
+    public float lastStateDelta(){
+        return lastStateDelta;
+    }
+
+    public float lastTimeDelta(){
+        return lastTimeDelta;
     }
 
     public long lastTotalNanos(){
@@ -78,10 +94,18 @@ public final class SeamRuntimeScheduler{
     }
 
     public void step(){
-        step(1f);
+        step(frameClock.sample());
     }
 
     public void step(float delta){
+        step(frameClock.fixed(delta));
+    }
+
+    public void step(float stateDelta, float timeDelta){
+        step(frameClock.delta(stateDelta, timeDelta));
+    }
+
+    public void step(SeamRuntimeFrameClock.FrameDelta delta){
         validateDelta(delta);
         begin();
 
@@ -89,7 +113,8 @@ public final class SeamRuntimeScheduler{
 
         try{
             profiles.clear();
-            lastDelta = delta;
+            lastStateDelta = delta.stateDelta;
+            lastTimeDelta = delta.timeDelta;
             lastEventCount = 0;
             lastEventNanos = 0L;
 
@@ -112,7 +137,8 @@ public final class SeamRuntimeScheduler{
         active = false;
         activeThread = null;
         tick = 0L;
-        lastDelta = 0f;
+        lastStateDelta = 0f;
+        lastTimeDelta = 0f;
         lastTotalNanos = 0L;
         lastEventCount = 0;
         lastEventNanos = 0L;
@@ -120,7 +146,7 @@ public final class SeamRuntimeScheduler{
         runtimeEvents.clear();
     }
 
-    private void stepRuntime(SeamRuntime runtime, float delta){
+    private void stepRuntime(SeamRuntime runtime, SeamRuntimeFrameClock.FrameDelta delta){
         if(runtime == null){
             throw new IllegalStateException("Runtime registry contains null runtime.");
         }
@@ -129,7 +155,7 @@ public final class SeamRuntimeScheduler{
 
         long start = Time.nanos();
 
-        activation.runScopedIn(runtime, () -> updatePipeline.stepGameplayBase(runtime, delta));
+        activation.runScopedIn(runtime, () -> updatePipeline.stepGameplayBase(runtime, delta.stateDelta, delta.timeDelta));
 
         profiles.add(new RuntimeProfile(
         runtime.id,
@@ -173,13 +199,22 @@ public final class SeamRuntimeScheduler{
         activeThread = null;
     }
 
-    private static void validateDelta(float delta){
+    private static void validateDelta(SeamRuntimeFrameClock.FrameDelta delta){
+        if(delta == null){
+            throw new NullPointerException("delta");
+        }
+
+        validateDelta("stateDelta", delta.stateDelta);
+        validateDelta("timeDelta", delta.timeDelta);
+    }
+
+    private static void validateDelta(String name, float delta){
         if(Float.isNaN(delta) || Float.isInfinite(delta)){
-            throw new IllegalArgumentException("Scheduler delta must be finite.");
+            throw new IllegalArgumentException("Scheduler " + name + " must be finite.");
         }
 
         if(delta < 0f){
-            throw new IllegalArgumentException("Scheduler delta must not be negative.");
+            throw new IllegalArgumentException("Scheduler " + name + " must not be negative.");
         }
     }
 

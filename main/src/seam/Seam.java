@@ -24,8 +24,10 @@ public class Seam extends Mod{
     public static final SeamRuntimeDelayedRuns delayed = services.delayed;
     public static final SeamRuntimeUpdateTransaction update = services.update;
     public static final SeamRuntimeUpdatePipeline updatePipeline = services.updatePipeline;
+    public static final SeamRuntimeFrameClock frameClock = services.frameClock;
     public static final SeamRuntimeEventQueue runtimeEvents = services.runtimeEvents;
     public static final SeamRuntimeScheduler scheduler = services.scheduler;
+    public static final SeamRuntimeSchedulerDriver schedulerDriver = services.schedulerDriver;
     public static final SeamRuntimeMutationTransaction mutation = services.mutation;
 
     public Seam(){

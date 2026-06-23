@@ -1,5 +1,6 @@
 package seam.runtime.update;
 
+import arc.util.*;
 import mindustry.*;
 import mindustry.entities.*;
 import seam.runtime.*;
@@ -20,7 +21,7 @@ public final class SeamRuntimeUpdatePipeline{
     }
 
     public void stepClock(SeamRuntime runtime, float delta){
-        validateDelta(delta);
+        validateDelta("delta", delta);
         update.run(runtime, active -> stepClockRaw(active, delta));
     }
 
@@ -29,7 +30,7 @@ public final class SeamRuntimeUpdatePipeline{
             throw new IllegalArgumentException("Clock step amount must not be negative.");
         }
 
-        validateDelta(delta);
+        validateDelta("delta", delta);
 
         update.run(runtime, active -> {
             for(int i = 0; i < amount; i++){
@@ -85,27 +86,39 @@ public final class SeamRuntimeUpdatePipeline{
     }
 
     public void stepGameplayBase(SeamRuntime runtime, float delta){
-        validateDelta(delta);
+        stepGameplayBase(runtime, delta, delta);
+    }
+
+    public void stepGameplayBase(SeamRuntime runtime, float stateDelta, float timeDelta){
+        validateDelta("stateDelta", stateDelta);
+        validateDelta("timeDelta", timeDelta);
 
         update.run(runtime, active -> {
-            stepClockRaw(active, delta);
+            float previousDelta = Time.delta;
+            Time.delta = timeDelta;
 
-            Step.player.run(active);
-            Step.bullet.run(active);
-            Step.unit.run(active);
-            Step.build.run(active);
-            Step.sync.run(active);
-            Step.draw.run(active);
+            try{
+                stepClockRaw(active, stateDelta);
 
-            Step.fire.run(active);
-            Step.puddle.run(active);
-            Step.weather.run(active);
-            Step.label.run(active);
-            Step.powerGraph.run(active);
+                Step.player.run(active);
+                Step.bullet.run(active);
+                Step.unit.run(active);
+                Step.build.run(active);
+                Step.sync.run(active);
+                Step.draw.run(active);
 
-            if(Vars.asyncCore != null){
-                Vars.asyncCore.begin();
-                Vars.asyncCore.end();
+                Step.fire.run(active);
+                Step.puddle.run(active);
+                Step.weather.run(active);
+                Step.label.run(active);
+                Step.powerGraph.run(active);
+
+                if(Vars.asyncCore != null){
+                    Vars.asyncCore.begin();
+                    Vars.asyncCore.end();
+                }
+            }finally{
+                Time.delta = previousDelta;
             }
         });
     }
@@ -114,10 +127,9 @@ public final class SeamRuntimeUpdatePipeline{
         update.run(runtime, step::run);
     }
 
-    private static void stepClockRaw(SeamRuntime runtime, float delta){
-        runtime.state.tick++;
+    private static void stepClockRaw(SeamRuntime runtime, float stateDelta){
+        runtime.state.tick += stateDelta;
         runtime.state.updateId++;
-        runtime.state.wavetime += delta;
     }
 
     private static void updateGroup(EntityGroup<?> group){
@@ -128,13 +140,13 @@ public final class SeamRuntimeUpdatePipeline{
         group.update();
     }
 
-    private static void validateDelta(float delta){
+    private static void validateDelta(String name, float delta){
         if(Float.isNaN(delta) || Float.isInfinite(delta)){
-            throw new IllegalArgumentException("Clock step delta must be finite.");
+            throw new IllegalArgumentException("Runtime update " + name + " must be finite.");
         }
 
         if(delta < 0f){
-            throw new IllegalArgumentException("Clock step delta must not be negative.");
+            throw new IllegalArgumentException("Runtime update " + name + " must not be negative.");
         }
     }
 

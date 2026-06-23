@@ -22,8 +22,10 @@ public final class SeamServices{
     public final SeamRuntimePhaseGuard phaseGuard = new SeamRuntimePhaseGuard(activation, installer);
     public final SeamRuntimeUpdateTransaction update = new SeamRuntimeUpdateTransaction(phaseGuard);
     public final SeamRuntimeUpdatePipeline updatePipeline = new SeamRuntimeUpdatePipeline(update);
+    public final SeamRuntimeFrameClock frameClock = new SeamRuntimeFrameClock();
     public final SeamRuntimeEventQueue runtimeEvents = new SeamRuntimeEventQueue(activation);
-    public final SeamRuntimeScheduler scheduler = new SeamRuntimeScheduler(runtimes, activation, updatePipeline, runtimeEvents);
+    public final SeamRuntimeScheduler scheduler = new SeamRuntimeScheduler(runtimes, activation, updatePipeline, runtimeEvents, frameClock);
+    public final SeamRuntimeSchedulerDriver schedulerDriver = new SeamRuntimeSchedulerDriver(runtimes, scheduler);
     public final SeamRuntimeMutationTransaction mutation = new SeamRuntimeMutationTransaction(phaseGuard);
 
     private boolean eventsInstalled;
@@ -35,6 +37,7 @@ public final class SeamServices{
 
         eventsInstalled = true;
         host.captureCurrent();
+        schedulerDriver.installEvents();
 
         Events.on(ResetEvent.class, event -> clearForReset());
     }
@@ -48,6 +51,7 @@ public final class SeamServices{
             installer.abort();
         }
 
+        schedulerDriver.clear();
         scheduler.clear();
         delayed.clear();
         activation.clear();
