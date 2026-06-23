@@ -8,6 +8,7 @@ import seam.runtime.control.*;
 import seam.runtime.delayed.*;
 import seam.runtime.load.*;
 import seam.runtime.mutation.*;
+import seam.runtime.schedule.*;
 import seam.runtime.update.*;
 
 public final class SeamServices{
@@ -21,6 +22,8 @@ public final class SeamServices{
     public final SeamRuntimePhaseGuard phaseGuard = new SeamRuntimePhaseGuard(activation, installer);
     public final SeamRuntimeUpdateTransaction update = new SeamRuntimeUpdateTransaction(phaseGuard);
     public final SeamRuntimeUpdatePipeline updatePipeline = new SeamRuntimeUpdatePipeline(update);
+    public final SeamRuntimeEventQueue runtimeEvents = new SeamRuntimeEventQueue(activation);
+    public final SeamRuntimeScheduler scheduler = new SeamRuntimeScheduler(runtimes, activation, updatePipeline, runtimeEvents);
     public final SeamRuntimeMutationTransaction mutation = new SeamRuntimeMutationTransaction(phaseGuard);
 
     private boolean eventsInstalled;
@@ -45,6 +48,7 @@ public final class SeamServices{
             installer.abort();
         }
 
+        scheduler.clear();
         delayed.clear();
         activation.clear();
         runtimes.clear();

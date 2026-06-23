@@ -174,34 +174,34 @@ public final class SeamWorldActivationTransaction{
         }
 
         runtime.requireWorldReady();
-
-        SeamRuntime previousRuntime = activeRuntime;
-
-        if(previousRuntime == runtime){
-            task.run();
-            return;
-        }
-
         beginScope();
 
+        SeamRuntime previousRuntime = activeRuntime;
         SeamHostContext.Snapshot previousHost = null;
 
         try{
             if(previousRuntime == null){
                 previousHost = new SeamHostContext.Snapshot();
+                installRuntime(runtime);
+                activeRuntime = runtime;
+            }else if(previousRuntime == runtime){
+                SeamRuntimeValidator.validateActiveContext(runtime);
             }else{
                 previousRuntime.captureCamera(Core.camera);
+                installRuntime(runtime);
+                activeRuntime = runtime;
             }
 
-            installRuntime(runtime);
-            activeRuntime = runtime;
             SeamRuntimeValidator.validateActiveContext(runtime);
 
             task.run();
 
+            runtime.captureCamera(Core.camera);
             SeamRuntimeValidator.validateActiveContext(runtime);
         }finally{
-            runtime.captureCamera(Core.camera);
+            if(activeRuntime == runtime){
+                runtime.captureCamera(Core.camera);
+            }
 
             if(previousRuntime == null){
                 activeRuntime = null;
@@ -211,6 +211,8 @@ public final class SeamWorldActivationTransaction{
                 }else if(host.captured()){
                     host.restore();
                 }
+            }else if(previousRuntime == runtime){
+                activeRuntime = previousRuntime;
             }else{
                 installRuntime(previousRuntime);
                 activeRuntime = previousRuntime;
@@ -225,32 +227,38 @@ public final class SeamWorldActivationTransaction{
             throw new NullPointerException("task");
         }
 
-        SeamRuntime previousRuntime = activeRuntime;
-
-        if(previousRuntime == null){
-            task.run();
-            return;
-        }
-
         beginScope();
 
-        try{
-            previousRuntime.captureCamera(Core.camera);
+        SeamRuntime previousRuntime = activeRuntime;
 
-            if(hostSnapshot != null){
-                hostSnapshot.restore();
-            }else if(host.captured()){
-                host.restore();
+        try{
+            if(previousRuntime == null){
+                task.run();
+            }else{
+                previousRuntime.captureCamera(Core.camera);
+
+                if(hostSnapshot != null){
+                    hostSnapshot.restore();
+                }else if(host.captured()){
+                    host.restore();
+                }
+
+                activeRuntime = null;
+
+                task.run();
+
+                hostSnapshot = new SeamHostContext.Snapshot();
+            }
+        }finally{
+            if(previousRuntime != null){
+                if(activeRuntime == null){
+                    hostSnapshot = new SeamHostContext.Snapshot();
+                }
+
+                installRuntime(previousRuntime);
+                activeRuntime = previousRuntime;
             }
 
-            activeRuntime = null;
-
-            task.run();
-
-            hostSnapshot = new SeamHostContext.Snapshot();
-        }finally{
-            installRuntime(previousRuntime);
-            activeRuntime = previousRuntime;
             endScope();
         }
     }
