@@ -1,0 +1,169 @@
+import groovy.json.JsonSlurper
+
+def modJson = new File(rootDir, 'mod.json')
+def modInfo = new JsonSlurper().parseText(modJson.text)
+
+ext {
+    javaVersion = 17
+    modName = modInfo.name
+    modDisplayName = modInfo.displayName.toString().replaceAll(/\s+/, '')
+    modVersion = modInfo.version
+}
+
+subprojects {
+    apply plugin: 'java'
+
+    version = rootProject.ext.modVersion
+
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+        maven { url 'https://maven.xpdustry.com/mindustry' }
+    }
+
+    tasks.withType(JavaCompile) {
+        sourceCompatibility = rootProject.ext.javaVersion
+        targetCompatibility = rootProject.ext.javaVersion
+        options.incremental = true
+        options.encoding = 'UTF-8'
+    }
+}
+
+tasks.register('installClient', DefaultTask) {
+    final def mindustryPathProp = project.providers.gradleProperty('mindustryPath')
+    final def mindustryVersionProp = project.providers.gradleProperty('mindustryVersion')
+    final def defaultMinPath = new File(project.projectDir, "run").getAbsolutePath()
+
+    doLast {
+        String customPath = mindustryPathProp.getOrNull()
+        File targetPath = customPath && !customPath.trim().isEmpty()
+                ? file(customPath)
+                : file(defaultMinPath)
+        def isSteam = new File(targetPath, "Mindustry.exe").exists()
+        if (isSteam) {
+            logger.lifecycle("Mindustry is installed via Steam, skipping installation.")
+            return
+        }
+
+        String clientVersion = mindustryVersionProp.get()
+        File clientFile = new File(targetPath, "client-${clientVersion}.jar")
+
+        if (clientFile.exists()) {
+            logger.lifecycle("Client is installed at '${clientFile.absolutePath}'.")
+            return
+        }
+
+        targetPath.mkdirs()
+        clientFile.createNewFile()
+
+        logger.lifecycle("Downloading Mindustry ${clientVersion} client...")
+        String githubClientUrl = "https://github.com/Anuken/Mindustry/releases/download/${clientVersion}/Mindustry.jar"
+        URL url = new URL(githubClientUrl)
+        URLConnection connection = url.openConnection()
+        long contentLength = connection.contentLengthLong
+
+        InputStream input = connection.getInputStream()
+        FileOutputStream output = new FileOutputStream(clientFile)
+
+        byte[] buffer = new byte[8192]
+        long totalRead = 0
+        int bytesRead
+        int prevPercent = -1
+
+        while ((bytesRead = input.read(buffer)) != -1) {
+            output.write(buffer, 0, bytesRead)
+            totalRead += bytesRead
+
+            if (contentLength > 0) {
+                int percent = (int) ((totalRead * 100) / contentLength)
+                if (percent != prevPercent) {
+                    print "\r> Downloading Mindustry client: ${percent}%"
+                    System.out.flush()
+                    prevPercent = percent
+                }
+            }
+        }
+
+        input.close()
+        output.close()
+
+        logger.lifecycle("\nInstalled to '${clientFile.absolutePath}'.")
+    }
+}
+
+tasks.register('install', DefaultTask) {
+    final def mainProj = project(':main')
+    final def jarProvider = mainProj.tasks.named('jar', Jar).flatMap { it.archiveFile }
+    final def mindustryPathProp = project.providers.gradleProperty('mindustryPath')
+    final def defaultMinPath = new File(project.projectDir, "run").getAbsolutePath()
+
+    inputs.file(jarProvider)
+            .withPathSensitivity(PathSensitivity.ABSOLUTE)
+    inputs.property("mindustryPathPropValue", mindustryPathProp.orElse(""))
+
+    dependsOn(mainProj.tasks.named('jar'))
+
+    doLast {
+        File jarFile = jarProvider.get().asFile
+        String customPath = mindustryPathProp.getOrNull()
+
+        File targetPath = customPath && !customPath.trim().isEmpty()
+                ? file(customPath)
+                : file(defaultMinPath)
+        def isSteam = new File(targetPath, "Mindustry.exe").exists()
+        if (isSteam) targetPath = new File(targetPath, "saves")
+
+        File modsDir = new File(targetPath, "mods")
+        modsDir.mkdirs()
+
+        File existingJar = new File(modsDir, jarFile.name)
+        if (existingJar.exists()) {
+            existingJar.delete()
+        }
+
+        copy {
+            from jarFile
+            into modsDir
+        }
+
+        logger.lifecycle("Copied '${jarFile.name}' to '${modsDir.absolutePath}'.")
+    }
+}
+
+tasks.register('runClient', DefaultTask) {
+    dependsOn 'installClient', 'install'
+
+    final def mindustryPathProp = project.providers.gradleProperty('mindustryPath')
+    final def mindustryVersionProp = project.providers.gradleProperty('mindustryVersion')
+    final def defaultMinPath = new File(project.projectDir, "run").absolutePath
+
+    doLast {
+        String customPath = mindustryPathProp.getOrNull()
+        File targetPath = customPath && !customPath.trim().isEmpty()
+                ? file(customPath)
+                : file(defaultMinPath)
+        def isSteam = new File(targetPath, "Mindustry.exe").exists()
+        File mindustrySaves = targetPath
+        if (isSteam) mindustrySaves = new File(mindustrySaves, "saves")
+
+        String clientVersion = mindustryVersionProp.get()
+        File clientFile = new File(targetPath, "client-${clientVersion}.jar")
+        if (isSteam) clientFile = new File(targetPath, "Mindustry.exe")
+
+        logger.lifecycle("> Starting Mindustry.")
+
+        if (isSteam) {
+            exec {
+                environment "MINDUSTRY_DATA_DIR", mindustrySaves.absolutePath
+                environment "DEVELOPMENT", "true"
+                commandLine clientFile.absolutePath
+            }
+        } else {
+            exec {
+                environment "MINDUSTRY_DATA_DIR", mindustrySaves.absolutePath
+                environment "DEVELOPMENT", "true"
+                commandLine 'java', '-jar', clientFile.absolutePath, "-debug"
+            }
+        }
+    }
+}

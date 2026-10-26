@@ -1,0 +1,27 @@
+sourceSets.main {
+    java.srcDirs = ['src']
+}
+
+dependencies {
+    compileOnly "com.github.Anuken.Arc:arc-core:$arcVersion"
+    compileOnly "com.github.Anuken.Mindustry:core:$mindustryVersion"
+}
+
+configurations.configureEach {
+    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+        if (details.requested.group == 'com.github.Anuken.Arc') {
+            details.useVersion arcVersion
+        }
+    }
+}
+
+jar {
+    archiveFileName = "${modDisplayName}.jar"
+    from(sourceSets.main.output)
+    from(rootDir) {
+        include "mod.json"
+    }
+    from("assets/") {
+        include "**"
+    }
+}

@@ -1,0 +1,1339 @@
+diff --git a/main/src/seam/Seam.java b/main/src/seam/Seam.java
+index 8ba1cea..bdde1ac 100644
+--- a/main/src/seam/Seam.java
++++ b/main/src/seam/Seam.java
+@@ -5,8 +5,8 @@ import arc.struct.*;
+ import arc.util.*;
+ import mindustry.game.EventType.*;
+ import mindustry.mod.*;
+-import seam.core.*;
+ import seam.content.*;
++import seam.core.*;
+ import seam.world.blocks.*;
+ 
+ public class Seam extends Mod{
+@@ -24,14 +24,16 @@ public class Seam extends Mod{
+ 
+     @Override
+     public void init(){
+-        Log.info("[Seam] Foundation initialized. Ready to create SubWorlds.");
+-
+         Events.run(Trigger.preDraw, () -> {
+-            for(SubWorldMonitor.SubWorldMonitorBuild b : monitors) b.renderSubWorld();
++            for(int i = 0; i < monitors.size; i++){
++                monitors.get(i).renderSubWorld();
++            }
+         });
+ 
+         Events.run(Trigger.update, () -> {
+-            for(SubWorld w : worlds) w.update();
++            for(int i = 0; i < worlds.size; i++){
++                worlds.get(i).update();
++            }
+         });
+     }
+ 
+@@ -42,8 +44,6 @@ public class Seam extends Mod{
+     }
+ 
+     public static void removeWorld(SubWorld world){
+-        if(worlds.remove(world)){
+-            world.dispose();
+-        }
++        if(world != null) world.dispose();
+     }
+ }
+\ No newline at end of file
+diff --git a/main/src/seam/content/SeamBlocks.java b/main/src/seam/content/SeamBlocks.java
+index 6407aab..eeeb261 100644
+--- a/main/src/seam/content/SeamBlocks.java
++++ b/main/src/seam/content/SeamBlocks.java
+@@ -5,15 +5,14 @@ import mindustry.type.*;
+ import mindustry.world.meta.*;
+ import seam.world.blocks.*;
+ 
+-//just for funny testing
+ public class SeamBlocks{
+-    public static SubWorldMonitor monitorBlock;
++    public static SubWorldMonitor monitor;
+ 
+     public static void load(){
+-        monitorBlock = new SubWorldMonitor("subworld-monitor"){{
++        monitor = new SubWorldMonitor("subworld-monitor"){{
+             requirements(Category.effect, ItemStack.with(Items.copper, 1));
+             buildVisibility = BuildVisibility.shown;
+             size = 5;
+         }};
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/main/src/seam/core/FakeRendererFactory.java b/main/src/seam/core/FakeRendererFactory.java
+index e1efa55..0cb1512 100644
+--- a/main/src/seam/core/FakeRendererFactory.java
++++ b/main/src/seam/core/FakeRendererFactory.java
+@@ -2,36 +2,36 @@ package seam.core;
+ 
+ import arc.*;
+ import arc.graphics.*;
+-import arc.graphics.g2d.*;
+ import arc.graphics.gl.*;
+ import arc.math.geom.*;
+ import arc.struct.*;
+ import arc.util.*;
+-import mindustry.*;
+ import mindustry.core.*;
+ import mindustry.game.EventType.*;
+ import mindustry.graphics.*;
+ 
++/**
++ * Builds a {@link Renderer} for a subworld.
++ * Sub-renderers (blocks/fog/…) are created by field initializers and register on the active event map,
++ * so this must be called inside {@link SubWorldContext#run}.
++ */
+ public class FakeRendererFactory{
+ 
+-    public static Renderer create(SubWorld subworld){
++    /** @param host host renderer to copy read-only visual assets from; may be null */
++    public static Renderer create(@Nullable Renderer host){
++        // Field initializers construct BlockRenderer etc.; constructor assigns Core.camera (restored by context).
+         Renderer r = Reflect.make(Renderer.class.getName());
+ 
+-        subworld.context.run(() -> {
+-            Reflect.set(r, "blocks", new BlockRenderer());
+-            Reflect.set(r, "fog", new FogRenderer());
+-            Reflect.set(r, "lights", new LightRenderer());
+-            Reflect.set(r, "minimap", new MinimapRenderer());
+-            Reflect.set(r, "overlays", new OverlayRenderer(){
+-                @Override public void drawTop(){}
+-                @Override public void drawBottom(){}
+-            });
+-            Reflect.set(r, "pixelator", new Pixelator());
+-
+-            Events.fire(new ClientLoadEvent());
+-            Events.fire(new WorldLoadEvent());
++        // Avoid drawing host input overlays into the subworld FBO.
++        Reflect.set(r, "overlays", new OverlayRenderer(){
++            @Override public void drawTop(){}
++            @Override public void drawBottom(){}
+         });
+ 
++        // Constructor already allocated an effect buffer — replace with one we fully own.
++        if(r.effectBuffer != null){
++            try{ r.effectBuffer.dispose(); }catch(Throwable ignored){}
++        }
+         Reflect.set(r, "effectBuffer", new FrameBuffer());
+         Reflect.set(r, "clearColor", new Color(0f, 0f, 0f, 1f));
+         Reflect.set(r, "camShakeOffset", new Vec2());
+@@ -41,23 +41,23 @@ public class FakeRendererFactory{
+         r.minZoomInGame = 0.5f;
+         r.maxZoomInGame = 6f;
+ 
+-        if(Vars.renderer != null){
+-            r.envRenderers = Vars.renderer.envRenderers;
+-            r.customBackgrounds = Vars.renderer.customBackgrounds;
+-            r.fluidFrames = Vars.renderer.fluidFrames;
+-            r.bubbles = Vars.renderer.bubbles;
+-            r.splashes = Vars.renderer.splashes;
+-            r.planets = Vars.renderer.planets;
+-            r.animateShields = Vars.renderer.animateShields;
+-            r.animateWater = Vars.renderer.animateWater;
+-            r.drawWeather = Vars.renderer.drawWeather;
+-            r.drawStatus = Vars.renderer.drawStatus;
+-            r.enableEffects = Vars.renderer.enableEffects;
+-            r.drawDisplays = Vars.renderer.drawDisplays;
+-            r.drawLight = Vars.renderer.drawLight;
+-            r.pixelate = Vars.renderer.pixelate;
+-            r.showPings = Vars.renderer.showPings;
+-            r.showOtherBuildPlans = Vars.renderer.showOtherBuildPlans;
++        if(host != null){
++            r.envRenderers = host.envRenderers;
++            r.customBackgrounds = host.customBackgrounds;
++            r.fluidFrames = host.fluidFrames;
++            r.bubbles = host.bubbles;
++            r.splashes = host.splashes;
++            r.planets = host.planets;
++            r.animateShields = host.animateShields;
++            r.animateWater = host.animateWater;
++            r.drawWeather = host.drawWeather;
++            r.drawStatus = host.drawStatus;
++            r.enableEffects = host.enableEffects;
++            r.drawDisplays = host.drawDisplays;
++            r.drawLight = host.drawLight;
++            r.pixelate = host.pixelate;
++            r.showPings = host.showPings;
++            r.showOtherBuildPlans = host.showOtherBuildPlans;
+         }else{
+             r.envRenderers = new Seq<>();
+             r.customBackgrounds = new ObjectMap<>();
+@@ -66,8 +66,45 @@ public class FakeRendererFactory{
+             r.drawLight = true;
+             r.showPings = true;
+             r.showOtherBuildPlans = true;
++            r.loadFluidFrames();
+         }
+ 
++        if(r.fluidFrames == null) r.loadFluidFrames();
++
++        // BlockRenderer loads crack regions on ClientLoadEvent.
++        Events.fire(new ClientLoadEvent());
+         return r;
+     }
+-}
++
++    public static void dispose(Renderer r){
++        if(r == null) return;
++
++        disposeQuiet(r.effectBuffer);
++
++        if(r.fog != null){
++            disposeQuiet(Reflect.get(r.fog, "staticFog"));
++            disposeQuiet(Reflect.get(r.fog, "dynamicFog"));
++        }
++        if(r.blocks != null){
++            disposeQuiet(Reflect.get(r.blocks, "shadows"));
++            disposeQuiet(Reflect.get(r.blocks, "dark"));
++            Seq<?>[] caches = Reflect.get(r.blocks, "caches");
++            if(caches != null){
++                for(Seq<?> list : caches){
++                    if(list == null) continue;
++                    for(Object cache : list) disposeQuiet(cache);
++                    list.clear();
++                }
++            }
++        }
++        if(r.pixelator != null){
++            try{ Reflect.invoke(r.pixelator, "dispose"); }catch(Throwable ignored){}
++        }
++    }
++
++    private static void disposeQuiet(Object o){
++        if(o instanceof Disposable d){
++            try{ d.dispose(); }catch(Throwable ignored){}
++        }
++    }
++}
+\ No newline at end of file
+diff --git a/main/src/seam/core/SubWorld.java b/main/src/seam/core/SubWorld.java
+index afbbdc9..dd3de67 100644
+--- a/main/src/seam/core/SubWorld.java
++++ b/main/src/seam/core/SubWorld.java
+@@ -1,101 +1,102 @@
+ package seam.core;
+ 
++import java.util.concurrent.*;
++import arc.*;
++import arc.func.*;
+ import arc.graphics.*;
+-import arc.graphics.g2d.*;
+-import arc.graphics.gl.*;
+ import arc.struct.*;
+ import arc.util.*;
+-import arc.util.io.*;
+ import mindustry.*;
+ import mindustry.ai.*;
+ import mindustry.async.*;
+ import mindustry.core.*;
+ import mindustry.entities.*;
++import mindustry.game.EventType.*;
+ import mindustry.game.*;
+ import mindustry.gen.*;
+-import mindustry.logic.*;
++import mindustry.world.*;
++import seam.*;
++
++/** An isolated Mindustry world that can be updated and rendered independently of the host. */
++public class SubWorld{
++    public final World world = new World();
++    public final GameState state = new GameState();
++    public final Camera camera = new Camera();
++    public final SubWorldContext context = new SubWorldContext(this);
++
++    public final EntityGroup<Entityc> all = new EntityGroup<>(Entityc.class, false, false);
++    public final EntityGroup<Player> players = new EntityGroup<>(Player.class, false, true);
++    public final EntityGroup<Bullet> bullet = new EntityGroup<>(Bullet.class, true, false);
++    public final EntityGroup<Unit> unit = new EntityGroup<>(Unit.class, true, true);
++    public final EntityGroup<Building> build = new EntityGroup<>(Building.class, false, false);
++    public final EntityGroup<Syncc> sync = new EntityGroup<>(Syncc.class, false, true);
++    public final EntityGroup<Drawc> draw = new EntityGroup<>(Drawc.class, false, false);
++    public final EntityGroup<Fire> fire = new EntityGroup<>(Fire.class, false, false);
++    public final EntityGroup<Puddle> puddle = new EntityGroup<>(Puddle.class, false, false);
++    public final EntityGroup<WeatherState> weather = new EntityGroup<>(WeatherState.class, false, false);
++    public final EntityGroup<WorldLabel> label = new EntityGroup<>(WorldLabel.class, false, true);
++    public final EntityGroup<PowerGraphUpdaterc> powerGraph = new EntityGroup<>(PowerGraphUpdaterc.class, false, false);
+ 
+-public class SubWorld implements Entityc{
+-    public final World world;
+-    public final GameState state;
+-    public final SubWorldContext context;
+-    public final Camera camera;
+-    public @Nullable Renderer renderer;
+-    
+-    public BlockIndexer indexer;
+-    public Logic logic;
++    public Universe universe;
++    public AsyncCore asyncCore;
++    public AvoidanceProcess avoidance;
+     public WaveSpawner spawner;
++    public BlockIndexer indexer;
+     public Pathfinder pathfinder;
+     public ControlPathfinder controlPath;
+-    public GlobalVars logicVars;
+     public FogControl fogControl;
+-    public Universe universe;
+-    public AsyncCore asyncCore;
+-    
+-    public final EntityGroup<Entityc> all;
+-    public final EntityGroup<Player> player;
+-    public final EntityGroup<Bullet> bullet;
+-    public final EntityGroup<Unit> unit;
+-    public final EntityGroup<Building> build;
+-    public final EntityGroup<Syncc> sync;
+-    public final EntityGroup<Drawc> draw;
+-    public final EntityGroup<Fire> fire;
+-    public final EntityGroup<Puddle> puddle;
+-    public final EntityGroup<WeatherState> weather;
+-    public final EntityGroup<WorldLabel> label;
+-    public final EntityGroup<PowerGraphUpdaterc> powerGraph;
+-
+-    private int id;
+-    private boolean added;
++    public Logic logic;
++    public @Nullable Renderer renderer;
++
++    private boolean disposed;
+ 
+     public SubWorld(){
+-        this.id = EntityGroup.nextId();
+-        this.world = new World();
+-        this.state = new GameState();
+-        this.camera = new Camera();
+-        this.context = new SubWorldContext(this, this.world, this.state);
+-        
+-        this.all = new EntityGroup<>(Entityc.class, false, false);
+-        this.player = new EntityGroup<>(Player.class, false, true);
+-        this.bullet = new EntityGroup<>(Bullet.class, true, false);
+-        this.unit = new EntityGroup<>(Unit.class, true, true);
+-        this.build = new EntityGroup<>(Building.class, false, false);
+-        this.sync = new EntityGroup<>(Syncc.class, false, true);
+-        this.draw = new EntityGroup<>(Drawc.class, false, false);
+-        this.fire = new EntityGroup<>(Fire.class, false, false);
+-        this.puddle = new EntityGroup<>(Puddle.class, false, false);
+-        this.weather = new EntityGroup<>(WeatherState.class, false, false);
+-        this.label = new EntityGroup<>(WorldLabel.class, false, true);
+-        this.powerGraph = new EntityGroup<>(PowerGraphUpdaterc.class, false, false);
+-        
++        // Capture host renderer before context swaps Vars.renderer to null.
++        Renderer hostRenderer = Vars.renderer;
++
++        // Systems register Events listeners; must happen inside an isolated event map.
+         context.run(() -> {
+-            this.universe = new Universe();
+-            this.asyncCore = new AsyncCore();
+-            this.spawner = new WaveSpawner();
+-            this.indexer = new BlockIndexer();
+-            this.pathfinder = new Pathfinder();
+-            this.controlPath = new ControlPathfinder();
+-            this.fogControl = new FogControl();
+-            this.logicVars = new GlobalVars();
+-            this.logic = new Logic();
++            universe = new Universe();
++            asyncCore = new AsyncCore();
++            // AsyncCore constructor assigns Vars.avoidance as a side effect.
++            avoidance = Vars.avoidance;
++            spawner = new WaveSpawner();
++            indexer = new BlockIndexer();
++            pathfinder = new Pathfinder();
++            controlPath = new ControlPathfinder();
++            fogControl = new FogControl();
++            logic = new Logic();
++
++            // GlobalVars keeps static LVar fields — do not create/init a second instance.
++            // Vars.logicVars stays on the host (see SubWorldContext).
++
+             if(!Vars.headless){
+-                this.renderer = FakeRendererFactory.create(this);
++                renderer = FakeRendererFactory.create(hostRenderer);
+             }
+         });
+     }
+ 
++    /** Resize tile grid and spatial entity trees. Fires {@link WorldLoadEvent} inside this world. */
+     public void resize(int width, int height){
+         context.run(() -> {
+             world.resize(width, height);
+-            bullet.resize(0, 0, width * 8, height * 8);
+-            unit.resize(0, 0, width * 8, height * 8);
++            resizeTrees(width, height);
++            if(renderer != null) Events.fire(new WorldLoadEvent());
++        });
++    }
++
++    /** Load tiles via generator, then signal world load to local systems. */
++    public void load(int width, int height, Cons<Tiles> generator){
++        context.run(() -> {
++            world.loadGenerator(width, height, generator);
++            resizeTrees(width, height);
++            Events.fire(new WorldLoadEvent());
+         });
+     }
+ 
+-    @Override
+     public void update(){
+-        if(!state.isPlaying()) return;
+-        
++        if(disposed || !state.isPlaying() || state.isPaused() || Vars.state.isPaused()) return;
++
+         context.begin();
+         try{
+             if(asyncCore != null) asyncCore.begin();
+@@ -106,124 +107,66 @@ public class SubWorld implements Entityc{
+         }
+     }
+ 
+-    @Override
+-    public <T extends Entityc> T self(){
+-        return (T)this;
+-    }
+-
+-    @Override
+-    public <T> T as(){
+-        return (T)this;
+-    }
+-
+-    @Override
+-    public boolean isAdded(){
+-        return added;
+-    }
+-
+-    @Override
+-    public boolean isLocal(){
+-        return true;
+-    }
+-
+-    @Override
+-    public boolean isRemote(){
+-        return false;
+-    }
++    public void dispose(){
++        if(disposed) return;
++        disposed = true;
+ 
+-    @Override
+-    public boolean serialize(){
+-        return false;
+-    }
++        Seam.worlds.remove(this);
+ 
+-    @Override
+-    public int classId(){
+-        return -1;
+-    }
++        context.run(() -> {
++            state.set(GameState.State.menu);
++            Events.fire(new ResetEvent());
++            shutdownAsync();
++
++            all.clear();
++            players.clear();
++            bullet.clear();
++            unit.clear();
++            build.clear();
++            sync.clear();
++            draw.clear();
++            fire.clear();
++            puddle.clear();
++            weather.clear();
++            label.clear();
++            powerGraph.clear();
+ 
+-    @Override
+-    public int id(){
+-        return id;
+-    }
++            try{
++                world.clearBuildings();
++            }catch(Throwable ignored){
++            }
+ 
+-    @Override
+-    public void id(int id){
+-        this.id = id;
+-    }
++            if(renderer != null){
++                FakeRendererFactory.dispose(renderer);
++                renderer = null;
++            }
++        });
+ 
+-    @Override
+-    public void add(){
+-        if(!added){
+-            added = true;
+-            Groups.all.add(this);
+-        }
++        context.dispose();
++
++        universe = null;
++        asyncCore = null;
++        avoidance = null;
++        spawner = null;
++        indexer = null;
++        pathfinder = null;
++        controlPath = null;
++        fogControl = null;
++        logic = null;
+     }
+ 
+-    @Override
+-    public void remove(){
+-        if(added){
+-            added = false;
+-            Groups.all.remove(this);
+-            dispose();
+-        }
++    private void resizeTrees(int width, int height){
++        float w = width * Vars.tilesize, h = height * Vars.tilesize;
++        bullet.resize(0, 0, w, h);
++        unit.resize(0, 0, w, h);
+     }
+ 
+-    @Override
+-    public void afterRead(){}
+-
+-    @Override
+-    public void afterReadAll(){}
+-
+-    @Override
+-    public void beforeWrite(){}
+-
+-    @Override
+-    public void read(Reads read){}
+-
+-    @Override
+-    public void write(Writes write){}
+-
+-    public void dispose(){
+-        if(pathfinder != null){
+-            try{
+-                Reflect.invoke(pathfinder, "stop");
+-            }catch(Throwable ignored){}
+-            pathfinder = null;
+-        }
+-        if(fogControl != null){
+-            try{
+-                Reflect.invoke(fogControl, "stop");
+-            }catch(Throwable ignored){}
+-            fogControl = null;
+-        }
+-        if(renderer != null){
+-            try{
+-                if(renderer.effectBuffer != null) renderer.effectBuffer.dispose();
+-                if(renderer.fog != null){
+-                    FrameBuffer sf = Reflect.get(renderer.fog, "staticFog");
+-                    if(sf != null) sf.dispose();
+-                    FrameBuffer df = Reflect.get(renderer.fog, "dynamicFog");
+-                    if(df != null) df.dispose();
+-                }
+-                if(renderer.blocks != null){
+-                    FrameBuffer sh = Reflect.get(renderer.blocks, "shadows");
+-                    if(sh != null) sh.dispose();
+-                    FrameBuffer dk = Reflect.get(renderer.blocks, "dark");
+-                    if(dk != null) dk.dispose();
+-                    Seq<SpriteCache>[] caches = Reflect.get(renderer.blocks, "caches");
+-                    if(caches != null){
+-                        for(Seq<SpriteCache> arr : caches){
+-                            if(arr != null){
+-                                for(SpriteCache cache : arr){
+-                                    cache.dispose();
+-                                }
+-                                arr.clear();
+-                            }
+-                        }
+-                    }
+-                }
+-            }catch(Throwable ignored){}
+-            renderer = null;
++    private void shutdownAsync(){
++        if(asyncCore == null) return;
++        try{
++            ExecutorService exec = Reflect.get(asyncCore, "executor");
++            if(exec != null) exec.shutdownNow();
++        }catch(Throwable ignored){
+         }
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/main/src/seam/core/SubWorldContext.java b/main/src/seam/core/SubWorldContext.java
+index a7dbc0c..b499291 100644
+--- a/main/src/seam/core/SubWorldContext.java
++++ b/main/src/seam/core/SubWorldContext.java
+@@ -1,46 +1,62 @@
+ package seam.core;
+ 
++import java.lang.reflect.*;
+ import arc.*;
+ import arc.graphics.*;
+ import arc.struct.*;
+ import arc.util.*;
+ import arc.util.Time.*;
+-import arc.util.pooling.*;
+ import mindustry.*;
+ import mindustry.ai.*;
+ import mindustry.async.*;
+ import mindustry.core.*;
+-import mindustry.gen.*;
+ import mindustry.entities.*;
+ import mindustry.game.*;
++import mindustry.gen.*;
+ 
++/**
++ * Installs a {@link SubWorld}'s state into global Mindustry/Arc statics for the duration of a scope.
++ * Only world-scoped fields are swapped; shared host services (content, UI, net, control, logicVars, …) stay put.
++ */
+ public class SubWorldContext{
+-    private final SubWorld subworld;
+-    
+-    // Host state
++    private static final Field timeRawField = field(Time.class, "timeRaw");
++    private static final Field globalTimeRawField = field(Time.class, "globalTimeRaw");
++    private static final Field pathWField = field(Pathfinder.class, "wwidth");
++    private static final Field pathHField = field(Pathfinder.class, "wheight");
++    private static final Field fogWField = field(FogControl.class, "ww");
++    private static final Field fogHField = field(FogControl.class, "wh");
++
++    private final SubWorld sub;
++    private final SubWorldEvents events = new SubWorldEvents();
++    private final Seq<DelayRun> runs = new Seq<>();
++
++    private double timeRaw, globalTimeRaw;
++    private float time, globalTime, delta = 1f;
++    private int pathW, pathH, fogW, fogH;
++    private int depth;
++
++    // host snapshot
+     private World hostWorld;
+     private GameState hostState;
+-    private Seq<DelayRun> hostRuns;
+     private Pathfinder hostPathfinder;
++    private ControlPathfinder hostControlPath;
+     private Renderer hostRenderer;
+     private Logic hostLogic;
+     private WaveSpawner hostSpawner;
+     private BlockIndexer hostIndexer;
+-    private FogControl hostFogControl;
+-    private AsyncCore hostAsyncCore;
+-    private Player hostPlayerVar;
+-    private Control hostControlVar;
+-    private Camera hostCamera;
++    private FogControl hostFog;
++    private AsyncCore hostAsync;
++    private AvoidanceProcess hostAvoidance;
+     private Universe hostUniverse;
++    private Player hostPlayer;
++    private Camera hostCamera;
++    private Seq<DelayRun> hostRuns;
++    private double hostTimeRaw, hostGlobalTimeRaw;
++    private float hostTime, hostGlobalTime, hostDelta;
++    private int hostPathW, hostPathH, hostFogW, hostFogH;
+ 
+-    private double hostTimeRaw;
+-    private double hostGlobalTimeRaw;
+-    private float hostTime;
+-    private float hostGlobalTime;
+-    private float hostDelta;
+-    
+     private EntityGroup<Entityc> hostAll;
+-    private EntityGroup<Player> hostPlayer;
++    private EntityGroup<Player> hostPlayers;
+     private EntityGroup<Bullet> hostBullet;
+     private EntityGroup<Unit> hostUnit;
+     private EntityGroup<Building> hostBuild;
+@@ -51,55 +67,43 @@ public class SubWorldContext{
+     private EntityGroup<WeatherState> hostWeather;
+     private EntityGroup<WorldLabel> hostLabel;
+     private EntityGroup<PowerGraphUpdaterc> hostPowerGraph;
+-    
+-    // Local state
+-    private final World localWorld;
+-    private final GameState localState;
+-    private final Seq<DelayRun> localRuns;
+-    private final SubWorldEvents localEvents;
+-
+-    private double localTimeRaw = 0.0;
+-    private double localGlobalTimeRaw = 0.0;
+-    private float localTime = 0f;
+-    private float localGlobalTime = 0f;
+-    private float localDelta = 1f;
+-    
+-    private int activeDepth = 0;
+-
+-    public SubWorldContext(SubWorld subworld, World world, GameState state){
+-        this.subworld = subworld;
+-        this.localWorld = world;
+-        this.localState = state;
+-        this.localRuns = new Seq<>();
+-        this.localEvents = new SubWorldEvents();
++
++    public SubWorldContext(SubWorld sub){
++        this.sub = sub;
+     }
+ 
+     public void begin(){
+-        if(activeDepth++ > 0) return;
+-        
++        if(depth++ > 0) return;
++
+         hostWorld = Vars.world;
+         hostState = Vars.state;
+         hostPathfinder = Vars.pathfinder;
++        hostControlPath = Vars.controlPath;
+         hostRenderer = Vars.renderer;
+         hostLogic = Vars.logic;
+         hostSpawner = Vars.spawner;
+         hostIndexer = Vars.indexer;
+-        hostFogControl = Vars.fogControl;
+-        hostAsyncCore = Vars.asyncCore;
+-        hostPlayerVar = Vars.player;
+-        hostControlVar = Vars.control;
++        hostFog = Vars.fogControl;
++        hostAsync = Vars.asyncCore;
++        hostAvoidance = Vars.avoidance;
+         hostUniverse = Vars.universe;
++        hostPlayer = Vars.player;
+         hostCamera = Core.camera;
+ 
+-        hostTimeRaw = Reflect.get(Time.class, "timeRaw");
+-        hostGlobalTimeRaw = Reflect.get(Time.class, "globalTimeRaw");
++        hostTimeRaw = getDouble(timeRawField);
++        hostGlobalTimeRaw = getDouble(globalTimeRawField);
+         hostTime = Time.time;
+         hostGlobalTime = Time.globalTime;
+         hostDelta = Time.delta;
+-        hostRuns = Reflect.get(Time.class, "runs");
+-        
++        hostRuns = Time.getRuns();
++
++        hostPathW = getInt(pathWField);
++        hostPathH = getInt(pathHField);
++        hostFogW = getInt(fogWField);
++        hostFogH = getInt(fogHField);
++
+         hostAll = Groups.all;
+-        hostPlayer = Groups.player;
++        hostPlayers = Groups.player;
+         hostBullet = Groups.bullet;
+         hostUnit = Groups.unit;
+         hostBuild = Groups.build;
+@@ -110,105 +114,151 @@ public class SubWorldContext{
+         hostWeather = Groups.weather;
+         hostLabel = Groups.label;
+         hostPowerGraph = Groups.powerGraph;
+-        
+-        Vars.world = localWorld;
+-        Vars.state = localState;
+-        if(subworld.pathfinder != null) Vars.pathfinder = subworld.pathfinder;
+-        if(subworld.renderer != null) Vars.renderer = subworld.renderer;
+-        if(subworld.logic != null) Vars.logic = subworld.logic;
+-        if(subworld.spawner != null) Vars.spawner = subworld.spawner;
+-        if(subworld.indexer != null) Vars.indexer = subworld.indexer;
+-        if(subworld.fogControl != null) Vars.fogControl = subworld.fogControl;
+-        if(subworld.asyncCore != null) Vars.asyncCore = subworld.asyncCore;
+-        if(subworld.universe != null) Vars.universe = subworld.universe;
+-        Core.camera = subworld.camera;
+-
+-        Reflect.set(Time.class, "timeRaw", localTimeRaw);
+-        Reflect.set(Time.class, "globalTimeRaw", localGlobalTimeRaw);
+-        Time.time = localTime;
+-        Time.globalTime = localGlobalTime;
+-        Time.delta = localDelta;
+-        Reflect.set(Time.class, "runs", localRuns);
+-        
+-        Groups.all = subworld.all;
+-        Groups.player = subworld.player;
+-        Groups.bullet = subworld.bullet;
+-        Groups.unit = subworld.unit;
+-        Groups.build = subworld.build;
+-        Groups.sync = subworld.sync;
+-        Groups.draw = subworld.draw;
+-        Groups.fire = subworld.fire;
+-        Groups.puddle = subworld.puddle;
+-        Groups.weather = subworld.weather;
+-        Groups.label = subworld.label;
+-        Groups.powerGraph = subworld.powerGraph;
+-        
+-        localEvents.begin();
++
++        Vars.world = sub.world;
++        Vars.state = sub.state;
++        Vars.pathfinder = sub.pathfinder;
++        Vars.controlPath = sub.controlPath;
++        Vars.renderer = sub.renderer;
++        Vars.logic = sub.logic;
++        Vars.spawner = sub.spawner;
++        Vars.indexer = sub.indexer;
++        Vars.fogControl = sub.fogControl;
++        Vars.asyncCore = sub.asyncCore;
++        Vars.avoidance = sub.avoidance;
++        Vars.universe = sub.universe;
++        Vars.player = null;
++        Core.camera = sub.camera;
++
++        setDouble(timeRawField, timeRaw);
++        setDouble(globalTimeRawField, globalTimeRaw);
++        Time.time = time;
++        Time.globalTime = globalTime;
++        Time.delta = delta;
++        Time.setRuns(runs);
++
++        setInt(pathWField, pathW);
++        setInt(pathHField, pathH);
++        setInt(fogWField, fogW);
++        setInt(fogHField, fogH);
++
++        Groups.all = sub.all;
++        Groups.player = sub.players;
++        Groups.bullet = sub.bullet;
++        Groups.unit = sub.unit;
++        Groups.build = sub.build;
++        Groups.sync = sub.sync;
++        Groups.draw = sub.draw;
++        Groups.fire = sub.fire;
++        Groups.puddle = sub.puddle;
++        Groups.weather = sub.weather;
++        Groups.label = sub.label;
++        Groups.powerGraph = sub.powerGraph;
++
++        events.begin();
+     }
+ 
+     public void end(){
+-        if(activeDepth == 0) throw new IllegalStateException("Not active.");
+-        if(--activeDepth > 0) return;
+-        
+-        localEvents.end();
+-
+-        localTimeRaw = Reflect.get(Time.class, "timeRaw");
+-        localGlobalTimeRaw = Reflect.get(Time.class, "globalTimeRaw");
+-        localTime = Time.time;
+-        localGlobalTime = Time.globalTime;
+-        localDelta = Time.delta;
+-
+-        Reflect.set(Time.class, "timeRaw", hostTimeRaw);
+-        Reflect.set(Time.class, "globalTimeRaw", hostGlobalTimeRaw);
+-        Time.time = hostTime;
+-        Time.globalTime = hostGlobalTime;
+-        Time.delta = hostDelta;
+-        Reflect.set(Time.class, "runs", hostRuns);
+-        
+-        Vars.world = hostWorld;
+-        Vars.state = hostState;
+-        Vars.pathfinder = hostPathfinder;
+-        Vars.renderer = hostRenderer;
+-        Vars.logic = hostLogic;
+-        Vars.spawner = hostSpawner;
+-        Vars.indexer = hostIndexer;
+-        Vars.fogControl = hostFogControl;
+-        Vars.asyncCore = hostAsyncCore;
+-        Vars.player = hostPlayerVar;
+-        Vars.control = hostControlVar;
+-        Vars.universe = hostUniverse;
+-        Core.camera = hostCamera;
+-        
+-        Groups.all = hostAll;
+-        Groups.player = hostPlayer;
+-        Groups.bullet = hostBullet;
+-        Groups.unit = hostUnit;
+-        Groups.build = hostBuild;
+-        Groups.sync = hostSync;
+-        Groups.draw = hostDraw;
+-        Groups.fire = hostFire;
+-        Groups.puddle = hostPuddle;
+-        Groups.weather = hostWeather;
+-        Groups.label = hostLabel;
+-        Groups.powerGraph = hostPowerGraph;
++        if(depth == 0) throw new IllegalStateException("SubWorldContext.end without begin");
++        if(--depth > 0) return;
++
++        try{
++            events.end();
++        }finally{
++            timeRaw = getDouble(timeRawField);
++            globalTimeRaw = getDouble(globalTimeRawField);
++            time = Time.time;
++            globalTime = Time.globalTime;
++            delta = Time.delta;
++            pathW = getInt(pathWField);
++            pathH = getInt(pathHField);
++            fogW = getInt(fogWField);
++            fogH = getInt(fogHField);
++
++            setDouble(timeRawField, hostTimeRaw);
++            setDouble(globalTimeRawField, hostGlobalTimeRaw);
++            Time.time = hostTime;
++            Time.globalTime = hostGlobalTime;
++            Time.delta = hostDelta;
++            Time.setRuns(hostRuns);
++
++            setInt(pathWField, hostPathW);
++            setInt(pathHField, hostPathH);
++            setInt(fogWField, hostFogW);
++            setInt(fogHField, hostFogH);
++
++            Vars.world = hostWorld;
++            Vars.state = hostState;
++            Vars.pathfinder = hostPathfinder;
++            Vars.controlPath = hostControlPath;
++            Vars.renderer = hostRenderer;
++            Vars.logic = hostLogic;
++            Vars.spawner = hostSpawner;
++            Vars.indexer = hostIndexer;
++            Vars.fogControl = hostFog;
++            Vars.asyncCore = hostAsync;
++            Vars.avoidance = hostAvoidance;
++            Vars.universe = hostUniverse;
++            Vars.player = hostPlayer;
++            Core.camera = hostCamera;
++
++            Groups.all = hostAll;
++            Groups.player = hostPlayers;
++            Groups.bullet = hostBullet;
++            Groups.unit = hostUnit;
++            Groups.build = hostBuild;
++            Groups.sync = hostSync;
++            Groups.draw = hostDraw;
++            Groups.fire = hostFire;
++            Groups.puddle = hostPuddle;
++            Groups.weather = hostWeather;
++            Groups.label = hostLabel;
++            Groups.powerGraph = hostPowerGraph;
++
++            clearHost();
++        }
++    }
++
++    public void run(Runnable task){
++        begin();
++        try{
++            task.run();
++        }finally{
++            end();
++        }
++    }
+ 
++    public boolean isActive(){
++        return depth > 0;
++    }
++
++    public void dispose(){
++        if(isActive()){
++            // Best-effort unwind if dispose races an active scope.
++            while(depth > 0) end();
++        }
++        runs.clear();
++        events.dispose();
++    }
++
++    private void clearHost(){
+         hostWorld = null;
+         hostState = null;
+         hostPathfinder = null;
++        hostControlPath = null;
+         hostRenderer = null;
+         hostLogic = null;
+         hostSpawner = null;
+         hostIndexer = null;
+-        hostFogControl = null;
+-        hostAsyncCore = null;
+-        hostPlayerVar = null;
+-        hostControlVar = null;
++        hostFog = null;
++        hostAsync = null;
++        hostAvoidance = null;
+         hostUniverse = null;
++        hostPlayer = null;
+         hostCamera = null;
+         hostRuns = null;
+-
+         hostAll = null;
+-        hostPlayer = null;
++        hostPlayers = null;
+         hostBullet = null;
+         hostUnit = null;
+         hostBuild = null;
+@@ -220,32 +270,30 @@ public class SubWorldContext{
+         hostLabel = null;
+         hostPowerGraph = null;
+     }
+-    
+-    public void run(Runnable task){
+-        begin();
++
++    private static Field field(Class<?> type, String name){
+         try{
+-            task.run();
+-        }finally{
+-            end();
++            Field f = type.getDeclaredField(name);
++            f.setAccessible(true);
++            return f;
++        }catch(Throwable t){
++            throw new RuntimeException("Missing field " + type.getSimpleName() + "." + name, t);
+         }
+     }
+-    
+-    public void updateRuns(){
+-        if(localRuns.size > 0){
+-            for(int i = 0; i < localRuns.size; i++){
+-                DelayRun run = localRuns.get(i);
+-                float delay = Reflect.get(run, "delay");
+-                delay -= Time.delta;
+-                Reflect.set(run, "delay", delay);
+-                if(delay <= 0){
+-                    localRuns.remove(i);
+-                    Runnable r = Reflect.get(run, "finish");
+-                    if(r != null) r.run();
+-                    Pools.free(run);
+-                    i--;
+-                }
+-            }
+-        }
++
++    private static double getDouble(Field f){
++        try{ return f.getDouble(null); }catch(Throwable t){ throw new RuntimeException(t); }
++    }
++
++    private static void setDouble(Field f, double v){
++        try{ f.setDouble(null, v); }catch(Throwable t){ throw new RuntimeException(t); }
+     }
+-}
+ 
++    private static int getInt(Field f){
++        try{ return f.getInt(null); }catch(Throwable t){ throw new RuntimeException(t); }
++    }
++
++    private static void setInt(Field f, int v){
++        try{ f.setInt(null, v); }catch(Throwable t){ throw new RuntimeException(t); }
++    }
++}
+\ No newline at end of file
+diff --git a/main/src/seam/core/SubWorldEvents.java b/main/src/seam/core/SubWorldEvents.java
+index 919d14b..e0cc92d 100644
+--- a/main/src/seam/core/SubWorldEvents.java
++++ b/main/src/seam/core/SubWorldEvents.java
+@@ -1,40 +1,67 @@
+ package seam.core;
+ 
++import java.lang.reflect.*;
+ import arc.*;
+ import arc.func.*;
+ import arc.struct.*;
+-import arc.util.*;
+ 
++/** Isolates {@link Events} listeners so subworld systems do not touch host listeners. */
++@SuppressWarnings("unchecked")
+ public class SubWorldEvents{
+-    private final ObjectMap<Object, Seq<Cons<?>>> localEvents = new ObjectMap<>();
+-    private final ObjectMap<Object, Seq<Cons<?>>> hostEvents = new ObjectMap<>();
+-    private boolean active = false;
++    private static final Field eventsField;
++
++    static{
++        try{
++            eventsField = Events.class.getDeclaredField("events");
++            eventsField.setAccessible(true);
++        }catch(Throwable t){
++            throw new RuntimeException("Failed to access Events map", t);
++        }
++    }
++
++    private final ObjectMap<Object, Seq<Cons<?>>> local = new ObjectMap<>();
++    private ObjectMap<Object, Seq<Cons<?>>> host;
++    private boolean active;
+ 
+     public void begin(){
+-        if(active) throw new IllegalStateException("Already active");
+-        
+-        ObjectMap<Object, Seq<Cons<?>>> globalEvents = Reflect.get(Events.class, "events");
+-        
+-        hostEvents.clear();
+-        hostEvents.putAll(globalEvents);
+-        
+-        globalEvents.clear();
+-        globalEvents.putAll(localEvents);
+-        
++        if(active) return;
++
++        ObjectMap<Object, Seq<Cons<?>>> global = global();
++        host = new ObjectMap<>();
++        host.putAll(global);
++
++        global.clear();
++        global.putAll(local);
+         active = true;
+     }
+ 
+     public void end(){
+-        if(!active) throw new IllegalStateException("Not active");
+-        
+-        ObjectMap<Object, Seq<Cons<?>>> globalEvents = Reflect.get(Events.class, "events");
+-        
+-        localEvents.clear();
+-        localEvents.putAll(globalEvents);
+-        
+-        globalEvents.clear();
+-        globalEvents.putAll(hostEvents);
+-        
+-        active = false;
++        if(!active) return;
++
++        try{
++            ObjectMap<Object, Seq<Cons<?>>> global = global();
++            local.clear();
++            local.putAll(global);
++
++            global.clear();
++            if(host != null) global.putAll(host);
++        }finally{
++            host = null;
++            active = false;
++        }
++    }
++
++    public void dispose(){
++        if(active) end();
++        local.clear();
++        host = null;
++    }
++
++    private static ObjectMap<Object, Seq<Cons<?>>> global(){
++        try{
++            return (ObjectMap<Object, Seq<Cons<?>>>)eventsField.get(null);
++        }catch(Throwable t){
++            throw new RuntimeException("Failed to read Events map", t);
++        }
+     }
+-}
++}
+\ No newline at end of file
+diff --git a/main/src/seam/core/SubWorldRenderer.java b/main/src/seam/core/SubWorldRenderer.java
+index 57fb8b1..9a74834 100644
+--- a/main/src/seam/core/SubWorldRenderer.java
++++ b/main/src/seam/core/SubWorldRenderer.java
+@@ -1,48 +1,49 @@
+ package seam.core;
+ 
+-import arc.*;
+ import arc.graphics.*;
+ import arc.graphics.g2d.*;
+ import arc.graphics.gl.*;
+-import arc.math.geom.*;
+ import arc.util.*;
+ import mindustry.*;
+ 
++/** Renders a {@link SubWorld} into an offscreen buffer. */
+ public class SubWorldRenderer{
+     public @Nullable FrameBuffer buffer;
+-    public final Rect bounds = new Rect();
+ 
+     public void resize(int width, int height){
+-        if(buffer != null) buffer.dispose();
++        if(buffer != null){
++            buffer.dispose();
++            buffer = null;
++        }
+         buffer = new FrameBuffer(width, height);
+         buffer.getTexture().setFilter(Texture.TextureFilter.nearest, Texture.TextureFilter.nearest);
+     }
+ 
+-    public FrameBuffer render(SubWorld subworld, float cameraX, float cameraY, float viewportWidth, float viewportHeight){
+-        if(buffer == null) return null;
++    public @Nullable FrameBuffer render(SubWorld sub, float camX, float camY, float viewW, float viewH){
++        if(buffer == null || sub.renderer == null || Vars.headless) return null;
+ 
+-        if(subworld.renderer == null && !Vars.headless){
+-            subworld.renderer = FakeRendererFactory.create(subworld);
++        if(sub.world.width() <= 0 || sub.world.height() <= 0){
++            buffer.begin(Color.black);
++            buffer.end();
++            return buffer;
+         }
+ 
+-        if(subworld.renderer == null) return null;
+-
+-        subworld.context.run(() -> {
++        sub.context.run(() -> {
+             Draw.flush();
+ 
+-            Camera subCamera = subworld.camera;
+-
+-            subCamera.position.set(cameraX, cameraY);
+-            subCamera.width = viewportWidth;
+-            subCamera.height = viewportHeight;
+-            subCamera.update();
+-
+-            bounds.set(cameraX - viewportWidth / 2f, cameraY - viewportHeight / 2f, viewportWidth, viewportHeight);
++            Camera cam = sub.camera;
++            cam.position.set(camX, camY);
++            cam.width = viewW;
++            cam.height = viewH;
++            cam.update();
+ 
+             buffer.begin(Color.black);
+-            subworld.renderer.draw();
+-            Draw.flush();
+-            buffer.end();
++            try{
++                sub.renderer.draw();
++                Draw.flush();
++            }finally{
++                buffer.end();
++            }
+         });
+ 
+         return buffer;
+diff --git a/main/src/seam/world/blocks/SubWorldMonitor.java b/main/src/seam/world/blocks/SubWorldMonitor.java
+index a06417b..8654fe0 100644
+--- a/main/src/seam/world/blocks/SubWorldMonitor.java
++++ b/main/src/seam/world/blocks/SubWorldMonitor.java
+@@ -2,14 +2,15 @@ package seam.world.blocks;
+ 
+ import arc.graphics.g2d.*;
+ import arc.graphics.gl.*;
++import arc.util.noise.*;
+ import mindustry.content.*;
+-import mindustry.core.*;
++import mindustry.core.GameState.*;
+ import mindustry.gen.*;
+ import mindustry.world.*;
+-import arc.util.noise.Simplex;
+ import seam.*;
+ import seam.core.*;
+ 
++/** Test block that hosts and displays a small isolated subworld. */
+ public class SubWorldMonitor extends Block{
+     public SubWorldMonitor(String name){
+         super(name);
+@@ -20,75 +21,76 @@ public class SubWorldMonitor extends Block{
+ 
+     public class SubWorldMonitorBuild extends Building{
+         public SubWorld subworld;
+-        public SubWorldRenderer renderer;
+-        public TextureRegion region = new TextureRegion();
+-        public FrameBuffer currentFbo;
++        public SubWorldRenderer view;
++        public final TextureRegion region = new TextureRegion();
++        public FrameBuffer frame;
+ 
+         @Override
+         public void created(){
+             super.created();
++
+             subworld = Seam.createWorld();
+-            subworld.resize(size, size);
+-            
+-            subworld.context.run(() -> {
+-                subworld.world.loadGenerator(size, size, tiles -> {
+-                    for(int x = 0; x < size; x++){
+-                        for(int y = 0; y < size; y++){
+-                            Block floor = Blocks.stone;
+-                            Block wall = Blocks.air;
+-                            
+-                            float noise = Simplex.noise2d(1, 2, 0.5, 0.2, x, y);
+-                            if(noise > 0.6f){
+-                                floor = Blocks.dirt;
+-                            }else if(noise > 0.4f){
+-                                floor = Blocks.sand;
+-                            }
+-                            
+-                            if(Simplex.noise2d(2, 2, 0.5, 0.1, x, y) > 0.7){
+-                                wall = Blocks.stoneWall;
+-                            }
+-                            
+-                            tiles.set(x, y, new Tile(x, y, floor, Blocks.air, wall));
++            subworld.load(block.size, block.size, tiles -> {
++                int s = block.size;
++                for(int x = 0; x < s; x++){
++                    for(int y = 0; y < s; y++){
++                        Block floor = Blocks.stone;
++                        Block wall = Blocks.air;
++
++                        float n = Simplex.noise2d(1, 2, 0.5f, 0.2f, x, y);
++                        if(n > 0.6f) floor = Blocks.dirt;
++                        else if(n > 0.4f) floor = Blocks.sand;
++
++                        if(Simplex.noise2d(2, 2, 0.5f, 0.1f, x, y) > 0.7f){
++                            wall = Blocks.stoneWall;
+                         }
++
++                        tiles.set(x, y, new Tile(x, y, floor, Blocks.air, wall));
+                     }
+-                });
++                }
+             });
+-            
+-            subworld.state.set(GameState.State.playing);
++            subworld.state.set(State.playing);
+ 
+-            renderer = new SubWorldRenderer();
+-            renderer.resize(size * 32, size * 32);
++            view = new SubWorldRenderer();
++            view.resize(block.size * 32, block.size * 32);
+ 
+             Seam.monitors.add(this);
+         }
+ 
+         public void renderSubWorld(){
+-            if(subworld != null && renderer != null){
+-                float cx = (size - 1) * 4f;
+-                float cy = (size - 1) * 4f;
+-                currentFbo = renderer.render(subworld, cx, cy, size * 8f, size * 8f);
+-            }
++            if(subworld == null || view == null) return;
++
++            float cx = (block.size - 1) * 4f;
++            float cy = (block.size - 1) * 4f;
++            float span = block.size * 8f;
++            frame = view.render(subworld, cx, cy, span, span);
+         }
+ 
+         @Override
+         public void draw(){
+             super.draw();
++            if(frame == null) return;
+ 
+-            if(currentFbo != null){
+-                Draw.color();
+-                region.set(currentFbo.getTexture());
+-                region.set(0, 0, currentFbo.getWidth(), currentFbo.getHeight());
+-                region.flip(false, true);
+-                Draw.rect(region, x, y, size * 8f, size * 8f);
+-            }
++            Draw.color();
++            region.set(frame.getTexture());
++            region.set(0, 0, frame.getWidth(), frame.getHeight());
++            region.flip(false, true);
++            Draw.rect(region, x, y, block.size * 8f, block.size * 8f);
+         }
+ 
+         @Override
+-        public void remove(){
++        public void onRemoved(){
+             Seam.monitors.remove(this);
+-            if(subworld != null) Seam.removeWorld(subworld);
+-            if(renderer != null) renderer.dispose();
+-            super.remove();
++            if(subworld != null){
++                Seam.removeWorld(subworld);
++                subworld = null;
++            }
++            if(view != null){
++                view.dispose();
++                view = null;
++            }
++            frame = null;
++            super.onRemoved();
+         }
+     }
+ }
