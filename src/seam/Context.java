@@ -4,46 +4,76 @@ import arc.*;
 import arc.func.*;
 import arc.struct.*;
 import arc.util.*;
+import arc.util.Time.*;
 import arc.util.pooling.Pool.*;
 import mindustry.*;
+import mindustry.ai.*;
+import mindustry.async.*;
 import mindustry.core.*;
 import mindustry.entities.*;
 import mindustry.gen.*;
 
 import java.lang.reflect.*;
 
-/** Experimental data scope. Failed exit capture invalidates its context; failed restoration blocks entry until a sound enclosing scope is restored. */
+/** Experimental world scope. Failed exit capture invalidates its context; failed restoration blocks entry until a sound enclosing scope is restored. */
 final class Context{
     private static final Thread thread = Core.app != null && Core.app.getMainThread() != null ? Core.app.getMainThread() : Thread.currentThread();
     private static final ObjectMap<Object, Seq<Cons<?>>> events = Reflect.get(Events.class, "events");
-    private static final Field freeQueue;
+    private static final Field freeQueue = field(Groups.class, "freeQueue"), removal = field(Time.class, "removal"), executor = field(AsyncCore.class, "executor");
     private static final Frame host = new Frame();
     private static Context current;
     private static boolean changing, restoreFailed;
 
-    static{
-        try{
-            freeQueue = Groups.class.getDeclaredField("freeQueue");
-            freeQueue.setAccessible(true);
-        }catch(ReflectiveOperationException e){
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
     private final Frame frame = new Frame();
-    private boolean invalid;
+    private boolean invalid, updating;
 
     Context(){
         run(() -> {
             Groups.init();
             Vars.world = new World();
             Vars.state = new GameState();
+            Vars.asyncCore = new AsyncCore();
+            //avoids a thread pool per world
+            Reflect.set(Vars.asyncCore, executor, Vars.mainExecutor);
+            Vars.spawner = new WaveSpawner();
+            Vars.indexer = new BlockIndexer();
+            Vars.logic = new Logic();
         });
     }
 
     static Context current(){
         checkThread();
         return current;
+    }
+
+    /** Runs one native logic frame of this world with {@code delta} ticks. */
+    void update(float delta){
+        if(updating) throw new IllegalStateException("Cannot update a world during its own update.");
+        run(() -> {
+            if(Vars.net.active()) throw new IllegalStateException("Worlds cannot update while the host network is active.");
+            if(Vars.state.rules.fog || Vars.state.isCampaign()) throw new IllegalStateException("Fog and campaign rules are not scoped yet.");
+            float previous = Time.delta;
+            Throwable failure = null;
+            updating = true;
+            Time.delta = delta;
+            try{
+                Vars.asyncCore.begin();
+                Vars.logic.update();
+            }catch(Throwable e){
+                failure = e;
+                throw e;
+            }finally{
+                try{
+                    Vars.asyncCore.end();
+                }catch(Throwable e){
+                    if(failure == null) throw e;
+                    failure.addSuppressed(e);
+                }finally{
+                    Time.delta = previous;
+                    updating = false;
+                }
+            }
+        });
     }
 
     void run(Runnable task){
@@ -122,6 +152,16 @@ final class Context{
         if(Thread.currentThread() != thread) throw new IllegalStateException("Use contexts on their bound thread.");
     }
 
+    private static Field field(Class<?> type, String name){
+        try{
+            Field field = type.getDeclaredField(name);
+            field.setAccessible(true);
+            return field;
+        }catch(ReflectiveOperationException e){
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
     private static final class Frame{
         World world;
         GameState state;
@@ -138,6 +178,14 @@ final class Context{
         boolean clearing;
         Seq<Poolable> pooling = new Seq<>();
         final ObjectMap<Object, Seq<Cons<?>>> listeners = new ObjectMap<>();
+        Seq<DelayRun> runs = new Seq<>(), removed = new Seq<>();
+        double time;
+        Logic logic;
+        WaveSpawner spawner;
+        BlockIndexer indexer;
+        AsyncCore async;
+        PhysicsProcess physics;
+        AvoidanceProcess avoidance;
 
         void capture(){
             world = Vars.world;
@@ -155,6 +203,15 @@ final class Context{
             clearing = Groups.isClearing;
             pooling = Reflect.get(null, freeQueue);
             listeners.set(events);
+            runs = Time.getRuns();
+            removed = Reflect.get(null, removal);
+            time = Time.getInternalTime();
+            logic = Vars.logic;
+            spawner = Vars.spawner;
+            indexer = Vars.indexer;
+            async = Vars.asyncCore;
+            physics = Vars.unitPhysics;
+            avoidance = Vars.avoidance;
         }
 
         void install(){
@@ -173,6 +230,15 @@ final class Context{
             Groups.isClearing = clearing;
             Reflect.set(null, freeQueue, pooling);
             events.set(listeners);
+            Time.setRuns(runs);
+            Reflect.set(null, removal, removed);
+            Time.setInternalTime(time);
+            Vars.logic = logic;
+            Vars.spawner = spawner;
+            Vars.indexer = indexer;
+            Vars.asyncCore = async;
+            Vars.unitPhysics = physics;
+            Vars.avoidance = avoidance;
         }
 
         void release(){
@@ -190,6 +256,14 @@ final class Context{
             weather = null;
             pooling = null;
             listeners.clear();
+            runs = null;
+            removed = null;
+            logic = null;
+            spawner = null;
+            indexer = null;
+            async = null;
+            physics = null;
+            avoidance = null;
         }
     }
 }

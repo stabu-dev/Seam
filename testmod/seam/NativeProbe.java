@@ -4,10 +4,16 @@ import arc.*;
 import arc.func.*;
 import arc.util.*;
 import mindustry.*;
+import mindustry.content.*;
 import mindustry.core.*;
+import mindustry.core.GameState.*;
 import mindustry.entities.*;
 import mindustry.game.EventType.*;
+import mindustry.game.*;
 import mindustry.gen.*;
+import mindustry.type.Weather.*;
+import mindustry.world.*;
+import mindustry.world.blocks.logic.LogicBlock.*;
 
 /** Runs production Context bytecode in a stock application's initialized environment. */
 public class NativeProbe extends Seam{
@@ -35,6 +41,10 @@ public class NativeProbe extends Seam{
                         verifyCaughtFailures();
                         Log.info("seam-boundary-probe: passed");
                     }
+                    case "simulation" -> {
+                        verifySimulation();
+                        return;
+                    }
                     default -> throw new IllegalArgumentException("Unknown native probe: " + mode);
                 }
                 Core.app.exit();
@@ -43,6 +53,111 @@ public class NativeProbe extends Seam{
                 System.exit(1);
             }
         });
+    }
+
+    private void verifySimulation(){
+        check(Vars.logic != null && !Vars.net.active(), "Expected an inactive official server.");
+        generate(50, 50, false);
+        Vars.logic.play();
+        Context a = new Context(), b = new Context();
+        World first = a.get(() -> Vars.world);
+        int[] delayed = {0}, updates = {0};
+        a.run(() -> {
+            generate(30, 30, true);
+            Vars.logic.play();
+            Time.run(60f, () -> delayed[0]++);
+            Events.run(Trigger.update, () -> {
+                if(updates[0]++ != 30) return;
+                try{
+                    a.update(1f);
+                    throw new AssertionError("A world updated itself.");
+                }catch(IllegalStateException expected){
+                }
+                b.update(0f);
+                check(Context.current() == a && Vars.world == first, "A nested update did not restore its caller.");
+            });
+        });
+        b.run(() -> {
+            generate(60, 40, false);
+            Vars.logic.play();
+        });
+        double[] paused = new double[2];
+        Core.app.addListener(new ApplicationListener(){
+            int frames;
+
+            @Override
+            public void update(){
+                try{
+                    a.update(Time.delta);
+                    b.update(Time.delta);
+                    if(++frames == 120){
+                        checkCrafting();
+                        a.run(NativeProbe.this::checkCrafting);
+                        b.run(() -> {
+                            checkCrafting();
+                            Vars.state.set(State.paused);
+                            paused[0] = Time.time;
+                            paused[1] = Vars.state.tick;
+                        });
+                    }else if(frames == 240){
+                        checkWorld(50, false);
+                        a.run(() -> {
+                            checkWorld(30, true);
+                            check(delayed[0] == 1 && Time.time > paused[0] + 60f, "The world clock did not run its own delayed task.");
+                        });
+                        b.run(() -> {
+                            checkWorld(60, false);
+                            check(Time.time == paused[0] && Vars.state.tick == paused[1], "A paused world advanced.");
+                        });
+                        check(Context.current() == null, "Simulation did not return to the host.");
+                        Log.info("seam-simulation-probe: passed");
+                        Core.app.exit();
+                    }
+                }catch(Throwable error){
+                    Log.err(error);
+                    System.exit(1);
+                }
+            }
+        });
+    }
+
+    private void generate(int width, int height, boolean waves){
+        Rules rules = new Rules();
+        rules.waves = waves;
+        rules.initialWaveSpacing = 30f;
+        rules.waveSpacing = 60f;
+        rules.dropZoneRadius = 8f;
+        if(waves){
+            rules.spawns.add(new SpawnGroup(UnitTypes.flare));
+            rules.weather.add(new WeatherEntry(Weathers.rain){{
+                always = true;
+            }});
+        }
+        Vars.state.rules = rules;
+        Vars.world.loadGenerator(width, height, tiles -> {
+            for(int x = 0; x < width; x++){
+                for(int y = 0; y < height; y++){
+                    tiles.set(x, y, new Tile(x, y, Blocks.stone, waves && x == width - 3 && y == height - 3 ? Blocks.spawn : Blocks.air, Blocks.air));
+                }
+            }
+        });
+        Vars.world.tile(3, 3).setBlock(Blocks.coreShard, Team.sharded);
+        Vars.world.tile(8, 3).setBlock(Blocks.graphitePress, Team.sharded);
+        Vars.world.build(8, 3).items.add(Items.coal, 10);
+        Vars.world.tile(12, 3).setBlock(Blocks.worldProcessor, Team.sharded);
+        ((LogicBuild)Vars.world.build(12, 3)).updateCode("jump 2 notEqual @mapw " + width + "\nsetflag \"seam\" true\nend");
+    }
+
+    private void checkCrafting(){
+        check(Vars.world.build(8, 3).items.get(Items.graphite) > 0, "Native crafting did not run in " + Vars.world.width() + "-tile world.");
+    }
+
+    private void checkWorld(int width, boolean waves){
+        check(Vars.world.width() == width, "Unexpected world.");
+        check(Vars.state.rules.objectiveFlags.contains("seam"), "A world processor did not read its own world.");
+        check(waves == Vars.state.wave > 2, "Waves crossed worlds.");
+        check(waves == Groups.unit.contains(u -> u.type == UnitTypes.flare), "Wave units crossed worlds.");
+        check(Groups.weather.size() == (waves ? 1 : 0), "Weather crossed worlds.");
     }
 
     private void verifyThreadBinding() throws InterruptedException{
@@ -209,7 +324,7 @@ public class NativeProbe extends Seam{
         int firstChanges = first.tileChanges, secondChanges = second.tileChanges;
         a.run(() -> {
             check(Context.current() == a && Vars.state != hostState, "Native data was not scoped.");
-            Events.fire(new TileChangeEvent());
+            Events.fire(new TileChangeEvent().set(new Tile(0, 0)));
             check(first.tileChanges == firstChanges + 1 && second.tileChanges == secondChanges, "Native World listeners crossed contexts.");
             EffectState effect = EffectState.create();
             effect.data = first;

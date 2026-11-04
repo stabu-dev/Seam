@@ -2,11 +2,12 @@ package seam;
 
 import arc.*;
 import arc.func.*;
+import arc.util.*;
 import mindustry.*;
 import mindustry.core.*;
 import mindustry.entities.*;
-import mindustry.game.EventType.*;
 import mindustry.gen.*;
+import mindustry.net.*;
 import org.junit.*;
 
 import static org.junit.Assert.*;
@@ -26,8 +27,11 @@ public class ContextTest{
         Groups.clear();
         Groups.updatePooling();
         Events.clear();
+        Time.clear();
+        Time.setInternalTime(0);
         Vars.world = null;
         Vars.state = null;
+        Vars.net = null;
     }
 
     @Test
@@ -70,31 +74,25 @@ public class ContextTest{
     }
 
     @Test
-    public void localWorldListenersOnlyReceiveLocalEvents(){
+    public void localListenersOnlyReceiveLocalEvents(){
         Context a = new Context(), b = new Context();
-        World first = a.get(() -> Vars.world), second = b.get(() -> Vars.world);
-        int firstChanges = first.tileChanges, secondChanges = second.tileChanges;
         int[] counts = new int[2];
-        a.run(() -> Events.on(TileChangeEvent.class, e -> counts[0]++));
-        b.run(() -> Events.on(TileChangeEvent.class, e -> counts[1]++));
-        a.run(() -> Events.fire(new TileChangeEvent()));
+        a.run(() -> Events.on(String.class, e -> counts[0]++));
+        b.run(() -> Events.on(String.class, e -> counts[1]++));
+        a.run(() -> Events.fire("a"));
         assertArrayEquals(new int[]{1, 0}, counts);
-        assertEquals(firstChanges + 1, first.tileChanges);
-        assertEquals(secondChanges, second.tileChanges);
-        b.run(() -> Events.fire(new TileChangeEvent()));
+        b.run(() -> Events.fire("b"));
         assertArrayEquals(new int[]{1, 1}, counts);
-        assertEquals(firstChanges + 1, first.tileChanges);
-        assertEquals(secondChanges + 1, second.tileChanges);
     }
 
     @Test
     public void unawareHostListenersAreNotRoutedYet(){
         int[] count = {0};
-        Events.on(TileChangeEvent.class, e -> count[0]++);
+        Events.on(String.class, e -> count[0]++);
         Context child = new Context();
-        child.run(() -> Events.fire(new TileChangeEvent()));
+        child.run(() -> Events.fire("child"));
         assertEquals(0, count[0]);
-        Events.fire(new TileChangeEvent());
+        Events.fire("host");
         assertEquals(1, count[0]);
     }
 
@@ -149,12 +147,12 @@ public class ContextTest{
     public void eventListenersCanBeAddedAndRemovedNatively(){
         Context child = new Context();
         int[] count = {0};
-        Cons<TileChangeEvent> listener = e -> count[0]++;
+        Cons<String> listener = e -> count[0]++;
         child.run(() -> {
-            Events.on(TileChangeEvent.class, listener);
-            Events.fire(new TileChangeEvent());
-            assertTrue(Events.remove(TileChangeEvent.class, listener));
-            Events.fire(new TileChangeEvent());
+            Events.on(String.class, listener);
+            Events.fire("added");
+            assertTrue(Events.remove(String.class, listener));
+            Events.fire("removed");
         });
         assertEquals(1, count[0]);
     }
@@ -165,14 +163,15 @@ public class ContextTest{
         parent.run(() -> {
             World world = Vars.world;
             EntityGroup<?> units = Groups.unit;
+            int[] count = {0};
+            Events.on(String.class, e -> count[0]++);
             Context child = new Context();
             assertSame(parent, Context.current());
             assertSame(world, Vars.world);
             assertSame(units, Groups.unit);
             child.run(() -> assertNotSame(world, Vars.world));
-            int changes = world.tileChanges;
-            Events.fire(new TileChangeEvent());
-            assertEquals(changes + 1, world.tileChanges);
+            Events.fire("parent");
+            assertEquals(1, count[0]);
         });
     }
 
@@ -307,7 +306,11 @@ public class ContextTest{
         EntityGroup<?> units = Groups.unit;
         World world = child.get(() -> Vars.world);
         EventKey key = new EventKey();
-        child.run(() -> Events.run(key, () -> {}));
+        int[] count = {0};
+        child.run(() -> {
+            Events.run(key, () -> {});
+            Events.on(String.class, e -> count[0]++);
+        });
         RuntimeException failure = new RuntimeException("installation");
         key.failure = failure;
         assertSame(failure, assertThrows(RuntimeException.class, () -> child.run(() -> fail("Incomplete state was installed."))));
@@ -317,10 +320,9 @@ public class ContextTest{
         key.failure = null;
         child.run(() -> {
             assertSame(world, Vars.world);
-            int changes = world.tileChanges;
-            Events.fire(new TileChangeEvent());
-            assertEquals(changes + 1, world.tileChanges);
+            Events.fire("retry");
         });
+        assertEquals(1, count[0]);
     }
 
     @Test
@@ -423,7 +425,11 @@ public class ContextTest{
     public void failedEntryCaptureLeavesTheActiveContextUsable(){
         Context a = new Context(), b = new Context();
         EventKey key = new EventKey();
-        a.run(() -> Events.run(key, () -> {}));
+        int[] count = {0};
+        a.run(() -> {
+            Events.run(key, () -> {});
+            Events.on(String.class, e -> count[0]++);
+        });
         RuntimeException failure = new RuntimeException("entry capture");
         a.run(() -> {
             World world = Vars.world;
@@ -432,9 +438,8 @@ public class ContextTest{
             assertSame(a, Context.current());
             assertSame(world, Vars.world);
             b.run(() -> assertSame(b, Context.current()));
-            int changes = world.tileChanges;
-            Events.fire(new TileChangeEvent());
-            assertEquals(changes + 1, world.tileChanges);
+            Events.fire("active");
+            assertEquals(1, count[0]);
         });
         a.run(() -> assertSame(a, Context.current()));
     }
@@ -462,6 +467,77 @@ public class ContextTest{
         assertSame(marker, host.data);
         Groups.updatePooling();
         assertNull(host.data);
+    }
+
+    @Test
+    public void delayedTasksAndClocksBelongToTheirContext(){
+        Context a = new Context(), b = new Context();
+        int[] runs = new int[3];
+        Time.setInternalTime(5);
+        Time.run(10f, () -> runs[0]++);
+        a.run(() -> Time.run(10f, () -> runs[1]++));
+        b.run(() -> Time.run(10f, () -> runs[2]++));
+        a.run(() -> advance(20f));
+        assertArrayEquals(new int[]{0, 1, 0}, runs);
+        assertEquals(5f, Time.time, 0f);
+        assertEquals(20f, a.get(() -> Time.time), 0f);
+        assertEquals(0f, b.get(() -> Time.time), 0f);
+        advance(20f);
+        assertArrayEquals(new int[]{1, 1, 0}, runs);
+    }
+
+    @Test
+    public void nestedClockUpdatesKeepTheOuterRemovalQueue(){
+        Context a = new Context(), b = new Context();
+        int[] runs = new int[3];
+        b.run(() -> Time.run(0f, () -> runs[2]++));
+        a.run(() -> {
+            Time.run(0f, () -> runs[0]++);
+            Time.run(0f, () -> {
+                runs[1]++;
+                b.run(() -> advance(1f));
+            });
+            advance(1f);
+            assertTrue(Time.getRuns().isEmpty());
+        });
+        assertArrayEquals(new int[]{1, 1, 1}, runs);
+        assertTrue(b.get(() -> Time.getRuns().isEmpty()));
+    }
+
+    @Test
+    public void worldServicesBelongToTheirContext(){
+        Context a = new Context(), b = new Context();
+        Object[] host = services(), first = a.get(ContextTest::services), second = b.get(ContextTest::services);
+        for(int i = 0; i < host.length; i++){
+            assertNotNull(first[i]);
+            assertNotSame(host[i], first[i]);
+            assertNotSame(first[i], second[i]);
+        }
+        assertArrayEquals(host, services());
+        a.run(() -> assertArrayEquals(first, services()));
+    }
+
+    @Test
+    public void updateRejectsUnscopedFogAndNetwork(){
+        Context child = new Context();
+        Vars.net = new Net(null);
+        child.run(() -> Vars.state.rules.fog = true);
+        assertThrows(IllegalStateException.class, () -> child.update(1f));
+        child.run(() -> Vars.state.rules.fog = false);
+        Vars.net.setClientConnected();
+        assertThrows(IllegalStateException.class, () -> child.update(1f));
+        assertNull(Context.current());
+    }
+
+    private static void advance(float delta){
+        float previous = Time.delta;
+        Time.delta = delta;
+        Time.update();
+        Time.delta = previous;
+    }
+
+    private static Object[] services(){
+        return new Object[]{Vars.logic, Vars.spawner, Vars.indexer, Vars.asyncCore, Vars.unitPhysics, Vars.avoidance};
     }
 
     @SuppressWarnings("unchecked")

@@ -50,6 +50,12 @@ public class ModLoadTest{
     }
 
     @Test
+    public void hostAndTwoWorldsSimulateIndependently() throws Exception{
+        String output = runServer(Path.of(System.getProperty("seam.testJar")), "version\n", "simulation");
+        assertTrue(output, output.contains("seam-simulation-probe: passed"));
+    }
+
+    @Test
     public void nativeProbeUsesProductionClassesWithoutShippingTheProbe() throws Exception{
         try(ZipFile library = new ZipFile(System.getProperty("seam.jar"));
             ZipFile probe = new ZipFile(System.getProperty("seam.testJar"))){
@@ -83,7 +89,7 @@ public class ModLoadTest{
             input.write(commands.getBytes(StandardCharsets.UTF_8));
             input.flush();
             boolean exited = process.waitFor(45, TimeUnit.SECONDS);
-            String output = Files.readString(log);
+            String output = new String(Files.readAllBytes(log), StandardCharsets.UTF_8);
             assertTrue("Server timed out.\n" + output, exited);
             assertEquals(output, 0, process.exitValue());
             return output;
