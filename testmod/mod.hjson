@@ -1,0 +1,7 @@
+name: seam-test
+displayName: Seam Tests
+author: stabu
+main: seam.NativeProbe
+version: 0.1.0
+minGameVersion: 160.7
+java: true

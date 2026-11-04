@@ -2,7 +2,7 @@
 
 Java library mod for independent worlds in unmodified Mindustry.
 
-Only the library entry point is implemented. World isolation and standard components remain unimplemented; see [requirements](docs/design.md).
+The library contains an internal context prototype for native World, GameState, entity groups, deferred pooling and event registrations. It installs no hooks. Engine services, worker threads, time and reused event payloads remain unscoped. Resource ownership and standard components remain unimplemented; see [requirements](docs/design.md).
 
 ## Building
 
@@ -13,7 +13,7 @@ Requires JDK 17. Mindustry is pinned to v160.7; update `gradle.properties` and `
 - `./gradlew check` verifies loading in the official headless server. Download the pinned release's `server-release.jar` to `.work/server-v160.7.jar` first.
 - `./gradlew run` uses [MindustryClient](https://github.com/GglLfr/MindustryClient) to detect or download the client, install Seam and launch the game. Its client dependency is aligned with the pinned game version.
 
-Native boundary tests also demonstrate that separate World instances still share entity groups and event listeners. No isolation implementation is installed yet.
+Tests cover native data scopes, nesting and exception restoration. A separate test-only JAR runs the same Context bytecode inside the official headless server. Neither its probe nor its metadata is included in the library JAR. Host listeners are currently isolated from child contexts; transparent event delivery for unaware mods remains unresolved.
 
 The loading check does not establish runtime isolation, graphical behavior or Android execution. Remote CI has not yet run.
 

@@ -32,6 +32,18 @@ sourceSets.test{
     java.setSrcDirs(listOf("tests"))
 }
 
+val testmod by sourceSets.creating{
+    java.setSrcDirs(listOf("testmod"))
+    compileClasspath += sourceSets.main.get().output + configurations.compileClasspath.get()
+}
+
+val testmodJar = tasks.register<Jar>("testmodJar"){
+    archiveFileName.set("SeamTest.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("tests"))
+    from(sourceSets.main.get().output, testmod.output)
+    from("testmod/mod.hjson")
+}
+
 val mindustryVersion = providers.gradleProperty("mindustryVersion").get()
 require(mindustryVersion.matches(Regex("v\\d+(\\.\\d+)*"))){ "Pin an explicit Mindustry release." }
 val isWindows = System.getProperty("os.name").lowercase().contains("windows")
@@ -92,9 +104,10 @@ tasks.check{
 }
 
 tasks.test{
-    dependsOn(tasks.jar)
-    inputs.files(tasks.jar).withPropertyName("modJar")
+    dependsOn(tasks.jar, testmodJar)
+    inputs.files(tasks.jar, testmodJar).withPropertyName("modJars")
     systemProperty("seam.jar", tasks.jar.get().archiveFile.get().asFile.absolutePath)
+    systemProperty("seam.testJar", testmodJar.get().archiveFile.get().asFile.absolutePath)
     systemProperty("seam.server", file(".work/server-$mindustryVersion.jar").absolutePath)
     systemProperty("seam.gameVersion", mindustryVersion.removePrefix("v"))
 }
