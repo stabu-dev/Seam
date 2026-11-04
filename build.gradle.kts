@@ -1,5 +1,27 @@
+import mindustry.client.*
+import mindustry.client.service.*
+import mindustry.client.task.*
+
+buildscript{
+    val gameVersion = providers.gradleProperty("mindustryVersion").get()
+    repositories{
+        ivy{
+            url = uri("https://github.com/")
+            patternLayout{ artifact("/Anuken/Mindustry/releases/download/[revision]/dependencies.jar") }
+            metadataSources{ artifact() }
+            content{ includeVersion("Anuken", "Mindustry", gameVersion) }
+        }
+    }
+    configurations.classpath{
+        resolutionStrategy.eachDependency{
+            if(requested.group == "Anuken" && requested.name == "Mindustry") useVersion(gameVersion)
+        }
+    }
+}
+
 plugins{
     java
+    id("com.github.GglLfr.MindustryClient") version "v1.1.3"
 }
 
 sourceSets.main{
@@ -45,7 +67,28 @@ tasks.withType<JavaCompile>().configureEach{
 
 dependencies{
     compileOnly("Anuken:Mindustry:$mindustryVersion")
+    testImplementation("Anuken:Mindustry:$mindustryVersion")
     testImplementation("junit:junit:4.13.2")
+}
+
+val client = gradle.sharedServices.registerIfAbsent(MindustryClientPlugin.serviceName, MindustryClientService::class.java){}
+val install = tasks.register<Copy>("install"){
+    description = "Installs Seam into the detected client's mods directory."
+    usesService(client)
+    from(tasks.jar)
+    into(client.map{ it.detected.modsDirectory })
+}
+
+tasks.withType<RunClientTask>().configureEach{
+    dependsOn(install)
+}
+
+tasks.check{
+    doLast{
+        check(tasks.named<InstallClientTask>("installClient").get().buildNumber.get() == mindustryVersion.removePrefix("v")){
+            "The development client must match the pinned Mindustry dependency."
+        }
+    }
 }
 
 tasks.test{
