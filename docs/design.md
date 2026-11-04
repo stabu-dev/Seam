@@ -34,6 +34,8 @@ Keep code and file structure minimal. A dependent mod must not need annotation p
 
 ## Verification
 
+[Release acceptance](acceptance.md) defines what constitutes a ready library and the evidence required. Passing an internal checkpoint does not satisfy the full release criteria.
+
 Advertised guarantees require evidence from the actual pinned engine. In particular:
 
 - Independent state, time, pause, delayed actions and entity registrations across different-sized worlds.
