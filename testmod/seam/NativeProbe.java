@@ -27,6 +27,10 @@ public class NativeProbe extends Seam{
                         verify();
                         Log.info("seam-context-probe: passed");
                     }
+                    case "nested-restore-failure" -> {
+                        verifyNestedRestore();
+                        Log.info("seam-nested-restore-probe: passed");
+                    }
                     default -> throw new IllegalArgumentException("Unknown native probe: " + mode);
                 }
                 Core.app.exit();
@@ -77,6 +81,34 @@ public class NativeProbe extends Seam{
             throw new AssertionError("Context entry continued after failed host restoration.");
         }catch(IllegalStateException expected){
             check(expected.getMessage().contains("restoration"), "Unexpected rejection after failed restoration.");
+        }
+    }
+
+    private void verifyNestedRestore(){
+        World host = Vars.world;
+        for(boolean once : new boolean[]{false, true}){
+            Context a = new Context(), b = new Context();
+            RestoreKey key = new RestoreKey();
+            a.run(() -> Events.run(key, () -> {}));
+            RuntimeException failure = new RuntimeException("nested restore");
+            try{
+                a.run(() -> b.run(() -> {
+                    key.once = once;
+                    key.failure = failure;
+                }));
+                throw new AssertionError("Nested restoration failure was ignored.");
+            }catch(RuntimeException actual){
+                check(actual == failure, "Nested restoration replaced the original exception.");
+            }
+            key.failure = null;
+            try{
+                a.run(() -> {});
+                throw new AssertionError("A partially restored ancestor remained usable.");
+            }catch(IllegalStateException expected){
+                check(expected.getMessage().contains("invalid"), "Unexpected invalid-ancestor rejection.");
+            }
+            b.run(() -> check(Context.current() == b, "Healthy context was rejected after host recovery."));
+            check(Context.current() == null && Vars.world == host, "Nested failure did not restore the host.");
         }
     }
 
@@ -133,10 +165,13 @@ public class NativeProbe extends Seam{
 
     private static class RestoreKey{
         RuntimeException failure;
+        boolean once;
 
         @Override
         public int hashCode(){
-            if(failure != null) throw failure;
+            RuntimeException error = failure;
+            if(once) failure = null;
+            if(error != null) throw error;
             return 42;
         }
     }

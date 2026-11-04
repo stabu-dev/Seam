@@ -98,6 +98,7 @@ final class Context{
                     }
                 }catch(Throwable e){
                     restoreFailed = true;
+                    if(previous != null) previous.invalid = true;
                     if(failure == null) throw e;
                     if(failure != e) failure.addSuppressed(e);
                 }finally{

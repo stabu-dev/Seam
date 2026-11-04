@@ -38,6 +38,12 @@ public class ModLoadTest{
     }
 
     @Test
+    public void failedAncestorRestorationKeepsTheHostUsable() throws Exception{
+        String output = runServer(Path.of(System.getProperty("seam.testJar")), "version\n", "nested-restore-failure");
+        assertTrue(output, output.contains("seam-nested-restore-probe: passed"));
+    }
+
+    @Test
     public void nativeProbeUsesProductionClassesWithoutShippingTheProbe() throws Exception{
         try(ZipFile library = new ZipFile(System.getProperty("seam.jar"));
             ZipFile probe = new ZipFile(System.getProperty("seam.testJar"))){

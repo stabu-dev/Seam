@@ -354,6 +354,49 @@ public class ContextTest{
     }
 
     @Test
+    public void failedAncestorRestorationDoesNotPermitReuse(){
+        GameState host = Vars.state;
+        for(boolean once : new boolean[]{false, true}){
+            Context a = new Context(), b = new Context();
+            EventKey key = new EventKey();
+            a.run(() -> Events.run(key, () -> {}));
+            RuntimeException failure = new RuntimeException("restore");
+            assertSame(failure, assertThrows(RuntimeException.class, () -> a.run(() -> b.run(() -> {
+                if(once){
+                    key.onHash = () -> { throw failure; };
+                }else{
+                    key.failure = failure;
+                }
+            }))));
+            key.failure = null;
+            assertSame(host, Vars.state);
+            assertNull(Context.current());
+            assertThrows(IllegalStateException.class, () -> a.run(() -> fail("Reused a partially restored ancestor.")));
+            b.run(() -> assertSame(b, Context.current()));
+        }
+    }
+
+    @Test
+    public void failedEntryCaptureLeavesTheActiveContextUsable(){
+        Context a = new Context(), b = new Context();
+        EventKey key = new EventKey();
+        a.run(() -> Events.run(key, () -> {}));
+        RuntimeException failure = new RuntimeException("entry capture");
+        a.run(() -> {
+            World world = Vars.world;
+            key.onHash = () -> { throw failure; };
+            assertSame(failure, assertThrows(RuntimeException.class, () -> b.run(() -> fail("Entered after incomplete capture."))));
+            assertSame(a, Context.current());
+            assertSame(world, Vars.world);
+            b.run(() -> assertSame(b, Context.current()));
+            int changes = world.tileChanges;
+            Events.fire(new TileChangeEvent());
+            assertEquals(changes + 1, world.tileChanges);
+        });
+        a.run(() -> assertSame(a, Context.current()));
+    }
+
+    @Test
     public void deferredPoolingQueuesStayWithTheirContext(){
         Context a = new Context(), b = new Context();
         EffectState host = EffectState.create();
