@@ -44,6 +44,12 @@ public class ModLoadTest{
     }
 
     @Test
+    public void caughtFailuresCannotExposeReusableDataOrReturnSuccess() throws Exception{
+        String output = runServer(Path.of(System.getProperty("seam.testJar")), "version\n", "boundary-failure");
+        assertTrue(output, output.contains("seam-boundary-probe: passed"));
+    }
+
+    @Test
     public void nativeProbeUsesProductionClassesWithoutShippingTheProbe() throws Exception{
         try(ZipFile library = new ZipFile(System.getProperty("seam.jar"));
             ZipFile probe = new ZipFile(System.getProperty("seam.testJar"))){

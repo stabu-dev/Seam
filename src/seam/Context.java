@@ -60,7 +60,7 @@ final class Context{
         if(invalid) throw new IllegalStateException("Context snapshot is invalid.");
         if(changing) throw new IllegalStateException("Cannot enter a context during state exchange.");
         if(task == null) throw new IllegalArgumentException("Task is required.");
-        if(current == this) return task.get();
+        if(current == this) return invoke(task);
         Context previous = current;
         Frame saved = previous == null ? host : previous.frame;
         boolean captured = false, installed = false;
@@ -73,7 +73,7 @@ final class Context{
             current = this;
             installed = true;
             changing = false;
-            return task.get();
+            return invoke(task);
         }catch(Throwable e){
             failure = e;
             throw e;
@@ -92,7 +92,10 @@ final class Context{
                 current = previous;
                 try{
                     if(captured){
-                        if(previous != null && previous.invalid) throw new IllegalStateException("Cannot restore an invalid context.");
+                        if(previous != null && previous.invalid){
+                            invalid = true;
+                            throw new IllegalStateException("Cannot restore an invalid context.");
+                        }
                         saved.install();
                         restoreFailed = false;
                     }
@@ -107,6 +110,12 @@ final class Context{
                 }
             }
         }
+    }
+
+    private <T> T invoke(Prov<T> task){
+        T result = task.get();
+        if(invalid) throw new IllegalStateException("Context became invalid during its task.");
+        return result;
     }
 
     private static void checkThread(){

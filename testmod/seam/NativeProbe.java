@@ -31,6 +31,10 @@ public class NativeProbe extends Seam{
                         verifyNestedRestore();
                         Log.info("seam-nested-restore-probe: passed");
                     }
+                    case "boundary-failure" -> {
+                        verifyCaughtFailures();
+                        Log.info("seam-boundary-probe: passed");
+                    }
                     default -> throw new IllegalArgumentException("Unknown native probe: " + mode);
                 }
                 Core.app.exit();
@@ -112,6 +116,85 @@ public class NativeProbe extends Seam{
         }
     }
 
+    private void verifyCaughtFailures(){
+        GameState host = Vars.state;
+        for(boolean exposed : new boolean[]{false, true}){
+            Context a = new Context(), b = new Context(), healthy = new Context();
+            GameState first = a.get(() -> Vars.state), second = b.get(() -> Vars.state);
+            RestoreKey key = new RestoreKey();
+            a.run(() -> Events.run(key, () -> {}));
+            RuntimeException failure = new RuntimeException("nested failure");
+            try{
+                a.get(() -> {
+                    try{
+                        b.run(() -> {
+                            if(exposed){
+                                try{
+                                    a.run(() -> key.failure = failure);
+                                    throw new AssertionError("Invalid capture succeeded.");
+                                }catch(RuntimeException actual){
+                                    check(actual == failure, "Capture error was replaced.");
+                                }
+                            }else{
+                                key.failure = failure;
+                            }
+                        });
+                        throw new AssertionError("Failed restoration succeeded.");
+                    }catch(RuntimeException actual){
+                        check(exposed ? actual instanceof IllegalStateException : actual == failure, "Unexpected restoration error.");
+                        check(Context.current() == a && Vars.state == (exposed ? second : first), "Unexpected live state after restoration failure.");
+                        Vars.state.wave = 99;
+                    }
+                    return "invalid success";
+                });
+                throw new AssertionError("Invalid outer boundary returned success.");
+            }catch(IllegalStateException expected){
+                check(expected.getMessage().contains("invalid"), "Unexpected boundary rejection.");
+            }
+            key.failure = null;
+            rejectInvalid(a);
+            if(exposed){
+                rejectInvalid(b);
+            }else{
+                b.run(() -> check(Vars.state.wave != 99, "Unexposed neighbor was changed."));
+            }
+            healthy.run(() -> check(Context.current() == healthy, "Healthy context was rejected."));
+            check(Context.current() == null && Vars.state == host, "Host did not recover from a caught failure.");
+        }
+    }
+
+    private void rejectInvalid(Context context){
+        try{
+            context.run(() -> {});
+            throw new AssertionError("Invalid context remained usable.");
+        }catch(IllegalStateException expected){
+            check(expected.getMessage().contains("invalid"), "Unexpected context rejection.");
+        }
+    }
+
+    private void verifyEntryCapture(){
+        World host = Vars.world;
+        Context a = new Context(), b = new Context();
+        RestoreKey key = new RestoreKey();
+        a.run(() -> Events.run(key, () -> {}));
+        RuntimeException failure = new RuntimeException("entry capture");
+        a.run(() -> {
+            World first = Vars.world;
+            EntityGroup<?> units = Groups.unit;
+            key.once = true;
+            key.failure = failure;
+            try{
+                b.run(() -> { throw new AssertionError("Entered after failed capture."); });
+                throw new AssertionError("Entry capture error was ignored.");
+            }catch(RuntimeException actual){
+                check(actual == failure, "Entry capture error was replaced.");
+            }
+            check(Context.current() == a && Vars.world == first && Groups.unit == units, "Failed entry changed live data.");
+            b.run(() -> check(Context.current() == b, "Entry could not be retried."));
+        });
+        check(Context.current() == null && Vars.world == host, "Entry-capture failure changed the host.");
+    }
+
     private void verify(){
         check(Vars.headless, "Expected the official headless application.");
         World hostWorld = Vars.world;
@@ -155,6 +238,7 @@ public class NativeProbe extends Seam{
         check(hostWorld.tileChanges == hostChanges, "Local construction or tile events changed the host world.");
         Events.fire(new Marker());
         check(hostEvents[0] == 1 && Events.remove(Marker.class, listener), "Host listener registration was not restored.");
+        verifyEntryCapture();
     }
 
     private void check(boolean condition, String message){

@@ -350,7 +350,50 @@ public class ContextTest{
         assertSame(host, Vars.state);
         assertNull(Context.current());
         assertThrows(IllegalStateException.class, () -> a.run(() -> {}));
-        b.run(() -> assertSame(b, Context.current()));
+        assertThrows(IllegalStateException.class, () -> b.run(() -> {}));
+        new Context().run(() -> {});
+    }
+
+    @Test
+    public void skippedRestorationInvalidatesTheExposedContext(){
+        Context a = new Context(), b = new Context(), healthy = new Context();
+        GameState host = Vars.state, exposed = b.get(() -> Vars.state);
+        EventKey key = new EventKey();
+        a.run(() -> Events.run(key, () -> {}));
+        assertThrows(IllegalStateException.class, () -> a.run(() -> {
+            try{
+                b.run(() -> {
+                    RuntimeException capture = new RuntimeException("capture");
+                    assertSame(capture, assertThrows(RuntimeException.class, () -> a.run(() -> key.failure = capture)));
+                });
+                fail("Restored an invalid ancestor.");
+            }catch(IllegalStateException expected){
+                assertSame(a, Context.current());
+                assertSame(exposed, Vars.state);
+                Vars.state.wave = 99;
+            }
+        }));
+        assertSame(host, Vars.state);
+        assertThrows(IllegalStateException.class, () -> b.run(() -> fail("Reused exposed data.")));
+        healthy.run(() -> assertSame(healthy, Context.current()));
+    }
+
+    @Test
+    public void caughtNestedFailureCannotTurnIntoASuccessfulResult(){
+        for(boolean recursive : new boolean[]{false, true}){
+            Context a = new Context(), b = new Context();
+            EventKey key = new EventKey();
+            a.run(() -> Events.run(key, () -> {}));
+            RuntimeException failure = new RuntimeException("restore");
+            Prov<String> task = () -> {
+                assertSame(failure, assertThrows(RuntimeException.class, () -> b.run(() -> key.failure = failure)));
+                return "invalid success";
+            };
+            assertThrows(IllegalStateException.class, () -> a.get(() -> recursive ? a.get(task) : task.get()));
+            key.failure = null;
+            assertNull(Context.current());
+            b.run(() -> assertSame(b, Context.current()));
+        }
     }
 
     @Test

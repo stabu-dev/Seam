@@ -15,7 +15,7 @@ Requires JDK 17. Mindustry is pinned to v160.7; update `gradle.properties` and `
 
 Tests cover native data scopes, nesting and exception restoration. A separate test-only JAR runs the same Context bytecode inside the official headless server. Neither its probe nor its metadata is included in the library JAR. Host listeners are currently isolated from child contexts; transparent event delivery for unaware mods remains unresolved.
 
-Failed exit capture invalidates the affected context. A failed restoration can leave live globals inconsistent; further context entry is rejected unless an enclosing scope successfully restores known state. This prototype provides no repair API after a failed host restoration.
+Failed exit capture invalidates the affected context. A failed restoration can leave live globals inconsistent; further context entry is rejected unless an enclosing scope successfully restores known state. A skipped restore also invalidates the exiting context whose data remain exposed. An invalidated boundary cannot return success even when its task catches the nested error. This prototype provides no repair API after a failed host restoration.
 
 The loading check does not establish runtime isolation, graphical behavior or Android execution. Remote CI has not yet run.
 
