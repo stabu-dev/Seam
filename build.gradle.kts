@@ -1,6 +1,7 @@
 import mindustry.client.*
 import mindustry.client.service.*
 import mindustry.client.task.*
+import org.gradle.process.*
 
 buildscript{
     val gameVersion = providers.gradleProperty("mindustryVersion").get()
@@ -32,7 +33,7 @@ sourceSets.test{
     java.setSrcDirs(listOf("tests"))
 }
 
-val testmod by sourceSets.creating{
+val testmod = sourceSets.create("testmod"){
     java.setSrcDirs(listOf("testmod"))
     compileClasspath += sourceSets.main.get().output + configurations.compileClasspath.get()
 }
@@ -49,6 +50,10 @@ require(mindustryVersion.matches(Regex("v\\d+(\\.\\d+)*"))){ "Pin an explicit Mi
 val isWindows = System.getProperty("os.name").lowercase().contains("windows")
 val sdkRoot: String? = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
 val projectName = project.name
+val serverRuntime = configurations.create("serverRuntime"){
+    isCanBeConsumed = false
+}
+val serverJar = providers.gradleProperty("mindustryServerJar").map{ file(it) }.orElse(provider{ serverRuntime.singleFile })
 
 repositories{
     mavenCentral()
@@ -64,6 +69,13 @@ repositories{
         content{
             includeVersion("Anuken", "Mindustry", mindustryVersion)
         }
+    }
+    ivy{
+        name = "MindustryServer"
+        url = uri("https://github.com/")
+        patternLayout{ artifact("/Anuken/Mindustry/releases/download/[revision]/server-release.jar") }
+        metadataSources{ artifact() }
+        content{ includeVersion("Anuken", "MindustryServer", mindustryVersion) }
     }
 }
 
@@ -81,6 +93,7 @@ dependencies{
     compileOnly("Anuken:Mindustry:$mindustryVersion")
     testImplementation("Anuken:Mindustry:$mindustryVersion")
     testImplementation("junit:junit:4.13.2")
+    serverRuntime("Anuken:MindustryServer:$mindustryVersion")
 }
 
 val client = gradle.sharedServices.registerIfAbsent(MindustryClientPlugin.serviceName, MindustryClientService::class.java){}
@@ -106,9 +119,10 @@ tasks.check{
 tasks.test{
     dependsOn(tasks.jar, testmodJar)
     inputs.files(tasks.jar, testmodJar).withPropertyName("modJars")
+    inputs.file(serverJar).withPropertyName("officialServer").withPathSensitivity(PathSensitivity.NONE)
     systemProperty("seam.jar", tasks.jar.get().archiveFile.get().asFile.absolutePath)
     systemProperty("seam.testJar", testmodJar.get().archiveFile.get().asFile.absolutePath)
-    systemProperty("seam.server", file(".work/server-$mindustryVersion.jar").absolutePath)
+    jvmArgumentProviders.add(CommandLineArgumentProvider{ listOf("-Dseam.server=${serverJar.get().absolutePath}") })
     systemProperty("seam.gameVersion", mindustryVersion.removePrefix("v"))
 }
 

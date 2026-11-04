@@ -12,14 +12,14 @@ import mindustry.gen.*;
 
 import java.lang.reflect.*;
 
-/** Experimental data scope. Engine services, workers, timing and resource ownership are not yet enrolled. */
+/** Experimental data scope. Failed exit capture invalidates its context; failed restoration blocks entry until a sound enclosing scope is restored. */
 final class Context{
     private static final Thread thread = Core.app != null && Core.app.getMainThread() != null ? Core.app.getMainThread() : Thread.currentThread();
     private static final ObjectMap<Object, Seq<Cons<?>>> events = Reflect.get(Events.class, "events");
     private static final Field freeQueue;
     private static final Frame host = new Frame();
     private static Context current;
-    private static boolean changing;
+    private static boolean changing, restoreFailed;
 
     static{
         try{
@@ -31,6 +31,7 @@ final class Context{
     }
 
     private final Frame frame = new Frame();
+    private boolean invalid;
 
     Context(){
         run(() -> {
@@ -55,6 +56,8 @@ final class Context{
 
     <T> T get(Prov<T> task){
         checkThread();
+        if(restoreFailed) throw new IllegalStateException("A failed restoration left global state inconsistent.");
+        if(invalid) throw new IllegalStateException("Context snapshot is invalid.");
         if(changing) throw new IllegalStateException("Cannot enter a context during state exchange.");
         if(task == null) throw new IllegalArgumentException("Task is required.");
         if(current == this) return task.get();
@@ -77,8 +80,9 @@ final class Context{
         }finally{
             changing = true;
             try{
-                if(installed) frame.capture();
+                if(installed && !invalid) frame.capture();
             }catch(Throwable e){
+                invalid = true;
                 if(failure == null){
                     failure = e;
                     throw e;
@@ -87,8 +91,13 @@ final class Context{
             }finally{
                 current = previous;
                 try{
-                    if(captured) saved.install();
+                    if(captured){
+                        if(previous != null && previous.invalid) throw new IllegalStateException("Cannot restore an invalid context.");
+                        saved.install();
+                        restoreFailed = false;
+                    }
                 }catch(Throwable e){
+                    restoreFailed = true;
                     if(failure == null) throw e;
                     if(failure != e) failure.addSuppressed(e);
                 }finally{
@@ -100,7 +109,7 @@ final class Context{
     }
 
     private static void checkThread(){
-        if(Thread.currentThread() != thread) throw new IllegalStateException("Use contexts on their initialization thread.");
+        if(Thread.currentThread() != thread) throw new IllegalStateException("Use contexts on their bound thread.");
     }
 
     private static final class Frame{

@@ -16,14 +16,68 @@ public class NativeProbe extends Seam{
         super.init();
         Core.app.post(() -> {
             try{
-                verify();
-                Log.info("seam-context-probe: passed");
+                String mode = System.getProperty("seam.probe", "context");
+                switch(mode){
+                    case "restore-failure", "capture-restore-failure" -> {
+                        verifyFailedRestore(mode.equals("capture-restore-failure"));
+                        Log.info("seam-restore-probe: passed");
+                    }
+                    case "context" -> {
+                        verifyThreadBinding();
+                        verify();
+                        Log.info("seam-context-probe: passed");
+                    }
+                    default -> throw new IllegalArgumentException("Unknown native probe: " + mode);
+                }
                 Core.app.exit();
             }catch(Throwable error){
                 Log.err(error);
                 System.exit(1);
             }
         });
+    }
+
+    private void verifyThreadBinding() throws InterruptedException{
+        Throwable[] failure = {null};
+        Thread worker = new Thread(() -> {
+            try{
+                new Context();
+                failure[0] = new AssertionError("A worker created the first context.");
+            }catch(Throwable error){
+                failure[0] = error;
+            }
+        });
+        worker.start();
+        worker.join(5000);
+        check(!worker.isAlive() && failure[0] instanceof IllegalStateException, "First worker access did not respect the native application thread.");
+    }
+
+    private void verifyFailedRestore(boolean failCapture){
+        RestoreKey key = new RestoreKey(), localKey = new RestoreKey();
+        Events.run(key, () -> {});
+        Context child = new Context(), other = new Context();
+        RuntimeException first = new RuntimeException(failCapture ? "capture" : "task"), restore = new RuntimeException("restore");
+        try{
+            child.run(() -> {
+                key.failure = restore;
+                if(failCapture){
+                    Events.run(localKey, () -> {});
+                    localKey.failure = first;
+                }else{
+                    throw first;
+                }
+            });
+            throw new AssertionError("Restoration failure was ignored.");
+        }catch(RuntimeException actual){
+            check(actual == first && actual.getSuppressed().length == 1 && actual.getSuppressed()[0] == restore, "Restoration failure replaced the original exception.");
+        }
+        key.failure = null;
+        try{
+            other.run(() -> {});
+            throw new AssertionError("Context entry continued after failed host restoration.");
+        }catch(IllegalStateException expected){
+            check(expected.getMessage().contains("restoration"), "Unexpected rejection after failed restoration.");
+        }
     }
 
     private void verify(){
@@ -76,4 +130,14 @@ public class NativeProbe extends Seam{
     }
 
     private static class Marker{}
+
+    private static class RestoreKey{
+        RuntimeException failure;
+
+        @Override
+        public int hashCode(){
+            if(failure != null) throw failure;
+            return 42;
+        }
+    }
 }

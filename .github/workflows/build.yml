@@ -14,12 +14,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - name: Download the pinned official server
-        shell: bash
-        run: |
-          version=$(sed -n 's/^mindustryVersion=//p' gradle.properties | tr -d '\r')
-          mkdir -p .work
-          curl --fail --location "https://github.com/Anuken/Mindustry/releases/download/$version/server-release.jar" --output ".work/server-$version.jar"
       - name: Configure Android tools
         shell: pwsh
         run: '"$env:ANDROID_HOME/build-tools/34.0.0" >> $env:GITHUB_PATH'

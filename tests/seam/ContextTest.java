@@ -243,6 +243,17 @@ public class ContextTest{
     }
 
     @Test
+    public void nullTasksAreRejectedBeforeExchangingState(){
+        Context child = new Context();
+        EventKey key = new EventKey();
+        Events.run(key, () -> {});
+        key.onHash = () -> fail("A null task entered state exchange.");
+        assertThrows(IllegalArgumentException.class, () -> child.run(null));
+        assertThrows(IllegalArgumentException.class, () -> child.get(null));
+        assertNull(Context.current());
+    }
+
+    @Test
     public void repeatedSwitchesDoNotLeakContext(){
         Context a = new Context(), b = new Context();
         for(int i = 0; i < 1000; i++){
@@ -313,22 +324,33 @@ public class ContextTest{
     }
 
     @Test
-    public void captureAndRestorationFailuresAreBothReported(){
-        EventKey hostKey = new EventKey(), localKey = new EventKey();
-        Events.run(hostKey, () -> {});
+    public void failedCaptureMakesOnlyThatContextUnusable(){
         Context child = new Context();
-        GameState host = Vars.state;
-        RuntimeException capture = new RuntimeException("capture"), restore = new RuntimeException("restore");
-        RuntimeException actual = assertThrows(RuntimeException.class, () -> child.run(() -> {
-            Events.run(localKey, () -> {});
-            localKey.failure = capture;
-            hostKey.failure = restore;
-        }));
-        assertSame(capture, actual);
-        assertArrayEquals(new Throwable[]{restore}, actual.getSuppressed());
-        assertSame(host, Vars.state);
+        EventKey key = new EventKey();
+        child.run(() -> Events.run(key, () -> {}));
+        RuntimeException failure = new RuntimeException("capture");
+        assertSame(failure, assertThrows(RuntimeException.class, () -> child.run(() -> key.failure = failure)));
+        key.failure = null;
+        assertThrows(IllegalStateException.class, () -> child.run(() -> fail("Reused an incomplete snapshot.")));
         assertNull(Context.current());
         new Context().run(() -> {});
+    }
+
+    @Test
+    public void anInvalidAncestorDoesNotPreventRestorationOfTheHost(){
+        Context a = new Context(), b = new Context();
+        GameState host = Vars.state;
+        EventKey key = new EventKey();
+        a.run(() -> Events.run(key, () -> {}));
+        RuntimeException failure = new RuntimeException("capture");
+        assertThrows(IllegalStateException.class, () -> a.run(() -> b.run(() -> {
+            assertSame(failure, assertThrows(RuntimeException.class, () -> a.run(() -> key.failure = failure)));
+        })));
+        key.failure = null;
+        assertSame(host, Vars.state);
+        assertNull(Context.current());
+        assertThrows(IllegalStateException.class, () -> a.run(() -> {}));
+        b.run(() -> assertSame(b, Context.current()));
     }
 
     @Test

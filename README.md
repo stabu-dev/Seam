@@ -10,12 +10,16 @@ Requires JDK 17. Mindustry is pinned to v160.7; update `gradle.properties` and `
 
 - `./gradlew jar` builds `build/libs/SeamDesktop.jar`.
 - `./gradlew deploy` builds the combined desktop/Android JAR. Requires an Android SDK and `d8` on PATH.
-- `./gradlew check` verifies loading in the official headless server. Download the pinned release's `server-release.jar` to `.work/server-v160.7.jar` first.
+- `./gradlew check` resolves the pinned official server through Gradle and runs the checks. An existing same-version JAR can be supplied with `-PmindustryServerJar=/path/to/server.jar`.
 - `./gradlew run` uses [MindustryClient](https://github.com/GglLfr/MindustryClient) to detect or download the client, install Seam and launch the game. Its client dependency is aligned with the pinned game version.
 
 Tests cover native data scopes, nesting and exception restoration. A separate test-only JAR runs the same Context bytecode inside the official headless server. Neither its probe nor its metadata is included in the library JAR. Host listeners are currently isolated from child contexts; transparent event delivery for unaware mods remains unresolved.
 
+Failed exit capture invalidates the affected context. A failed restoration can leave live globals inconsistent; further context entry is rejected unless an enclosing scope successfully restores known state. This prototype provides no repair API after a failed host restoration.
+
 The loading check does not establish runtime isolation, graphical behavior or Android execution. Remote CI has not yet run.
+
+[Release acceptance](docs/acceptance.md) defines the complete library contract and the native/platform evidence required before declaring it ready.
 
 ## References
 
