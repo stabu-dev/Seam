@@ -4,3 +4,6 @@ run/
 .idea/
 *.class
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
+!reference/prototype/gradle/wrapper/gradle-wrapper.jar
+.work/

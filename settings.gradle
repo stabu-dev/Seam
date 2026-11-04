@@ -1,8 +1,0 @@
-import groovy.json.JsonSlurper
-
-def modJson = new File(rootDir, 'mod.json')
-def modInfo = new JsonSlurper().parseText(modJson.text)
-
-include ':main'
-
-rootProject.name = modInfo.displayName

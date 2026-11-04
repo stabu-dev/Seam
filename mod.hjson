@@ -1,0 +1,8 @@
+name: seam
+displayName: Seam
+author: stabu
+main: seam.Seam
+description: "Independent world runtimes for Mindustry mods."
+version: 0.1.0
+minGameVersion: 160.7
+java: true
