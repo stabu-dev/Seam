@@ -2,11 +2,13 @@
 
 Status: **draft; blocks release acceptance**. This profile defines required records, not completed evidence. Its unresolved items must be populated before it can become frozen.
 
-The freeze point is the Git commit changing this status to frozen. Candidate acceptance runs record that commit separately from the implementation revision. Changes to scope or thresholds require a new profile revision and new runs; keep the previous results.
+The freeze point is the Git commit changing this status to frozen. Candidate acceptance runs record that commit separately from the implementation revision. Any acceptance-affecting amendment, including scenario expectations, projections, normalization, corpus, topology, tolerances or budgets, requires a new profile revision and reruns of affected comparisons; keep previous results and the change-impact record.
+
+All required acceptance evidence must cover one release-candidate revision and its exact artifact manifest. Earlier development runs are diagnostic evidence, not substitutes for candidate runs. A candidate change invalidates the affected evidence; the final clean build, CI and required end-to-end matrix run on the candidate being released.
 
 ## State and event contracts
 
-Commit an ownership inventory before accepting a runtime integration. Each row names the exact field/object, per-world or shared ownership, lifetime, permitted writer, native access point and an executable probe. Review `Vars`, `Core`, `Groups`, Arc time/queues and the mutable statics/scratch objects used by enrolled services. Include final references whose contents are mutable. An unclassified row blocks the relevant claim.
+Commit an ownership inventory before accepting a runtime integration. Derive its mechanical universe from the pinned classes and their hierarchies: static fields plus enrolled service-instance fields, including final references to mutable objects. Each row names the exact field/object, ownership, lifetime, permitted writer, native access point and executable probe, or a justified exclusion. Review `Vars`, `Core`, `Groups`, Arc time/queues and relevant service statics/scratch objects. Unclassified rows block the claim; reflection discovers fields, not their semantics.
 
 The event matrix records registration context, emission context, callback context, delivery count/order, captured-object ownership, payload lifetime and failure behavior. It must cover:
 
@@ -37,19 +39,49 @@ Corpus artifacts and scenario expectations are **not selected yet**. This is bou
 
 Specific machines/devices and artifact hashes are **not recorded yet**. Install only into isolated test profiles. Source inspection and DEX builds do not pass these execution rows.
 
+iOS is outside the agreed desktop/Android/headless target. Pixel references freeze resolution, renderer settings, comparison metric, channel/aggregate tolerances and permitted variability, not just a reference image.
+
+The network matrix must pair the Windows/Linux headless servers with desktop and Android clients, including mixed peers in different worlds. Pin transports and connection topology. Cover orderly disconnect, connection loss, interrupted asset/world loading, map changes, malformed/incomplete state and reconnect after a world was deleted. Additional transport claims need their own pairings.
+
 ## Scenarios and comparison format
 
 Freeze scenario IDs, map files/hashes or generation seeds, rules, content/mod manifests, inputs, tick counts and deterministic stepping. Include host-only controls and host plus two worlds, different dimensions, pause/resume, reset/load, transfers, disposal, malformed/interrupted saves and join/map-change/reconnect failures.
 
 Correctness runs emit JSONL records identifying implementation/profile revisions, game/artifact versions, platform, scenario, seed and tick. State records contain a canonical projection hash; event records contain sequence, event type, registration/emission/execution world, payload token and relevant fields. Commit the projection and normalization rules: normalize process-local handles and volatile metadata, not world-dependent differences. Verify raw instance identity separately within each process.
 
+At freeze, name the actual verifier entry point, source/artifact hash and command. It must reject missing records, undeclared normalizations and unaccounted differences, and identify mismatched fields/traces. The verifier and its projection coverage need native controls; a self-declared hash alone is insufficient.
+
 Use stock runs without Seam, Seam with only the host, then multi-world runs. Declare which comparisons are equivalent and which measure extra isolation work. Do not invoke a mutating save callback merely to sample state. Save/load scenarios also compare native file content and resumed behavior at frozen checkpoints.
 
 Scenario manifests, canonical projections and reference captures are **not recorded yet**.
 
+## Contract traceability
+
+These are required record names/formats, not existing passing artifacts. Each links scenarios, assertions, commands, platform runs and outputs to its acceptance contract; all are currently missing.
+
+| Acceptance contract | Required records |
+| --- | --- |
+| Stock application | Platform/artifact manifest, install commands and execution logs. |
+| Native baseline | Scenario manifest, projection/verifier versions, reference/candidate traces and diffs. |
+| Complete runtime | State inventory with a probe per classified row and native gameplay assertions. |
+| Context restoration | Exchange/fault cases, post-failure validity and surviving-context assertions. |
+| Work ownership | Latched executor, physics/main-executor, app-queue, Timer and delayed-task traces. |
+| Third-party compatibility | Pinned corpus and per-mechanism callback/cache expectations and results. |
+| Same-instance interaction | Identity, registrations, controllers, physics and failure outcomes for transfers/interactions. |
+| Optional components | Omit/replace matrix, dependent implementations and resource counts. |
+| Lifetime | Owner/rebinding/reset/disposal cases, unfinished work and retained-reference evidence. |
+| Persistence | Native files/hashes, resumed state and malformed/interrupted/missing-data cases. |
+| Networking | Peer/topology matrix, addressing/order traces and reconnect/failure results. |
+| Rendering and audio | Frozen pixel checks/tolerances and backend voice/source/resource observations. |
+| Scale and leaks | Frozen workloads/budgets, samples, estimator outputs and retention diagnostics. |
+| Usable API | Compiled dependent examples and their execution logs. |
+| Delivery | Clean-build artifacts, SDK/JDK records and an executed CI run URL/ID for the candidate revision. |
+
 ## Performance and resources
 
 Before candidate acceptance measurements, commit numeric budgets for each workload/platform: frame/step percentiles and sampling interval, heap/retained-world limits, thread counts and graphics/audio resources. Record warmup, repetitions, measurement tools and whether tracing is enabled. Baseline-only calibration is allowed before freezing budgets; candidate results cannot be used to choose passing thresholds retrospectively.
+
+Freeze the estimator, sample count, variance/outlier treatment and pass rule along with each budget. The tiny-world series has a predeclared minimum/target count and stopping rule: reach the target or report a measured budget crossing/knee; stopping at an arbitrary small passing count is not acceptance evidence. Test counts are not API capacity limits.
 
 Cover a native single-world control, full maps and an increasing tiny-world series. These are test workloads, not API world-count limits. Keep correctness tracing separate from performance sampling. Repeated create/update/dispose cycles must identify retained owners and unfinished work, not just report a final heap size.
 
