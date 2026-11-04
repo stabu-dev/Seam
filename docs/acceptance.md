@@ -31,6 +31,8 @@ Seam is ready when every required contract below has reproducible evidence on th
 
 ## Evidence rules
 
+The [verification profile](release-profile.md) specifies the inventories, event matrix, corpus selection, platform records, comparison format and budget freeze point. Its draft status is an explicit release blocker, not a passing manifest.
+
 Every result identifies its revision, game version, platform, fixture and command. A test must distinguish the advertised behavior from the corresponding failure; a successful process exit alone is insufficient.
 
 JVM tests establish their specific contracts. DEX compilation does not establish Android execution. A graphical backend starting does not establish multi-world rendering. A workflow file does not establish a successful CI run. A single mod or content fixture does not establish general compatibility.
