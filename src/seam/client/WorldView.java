@@ -88,11 +88,12 @@ public final class WorldView{
             return parts;
         });
         WorldView view = new WorldView(world);
-        boolean committed = false;
+        boolean committed = false, createdInput = false;
         Throwable failure = null;
         try{
             parts.own(world, owned);
             cameras.own(world, view.camera);
+            createdInput = WorldPlayer.ensureInput(world);
             //replay load events missed after startup (and map load if a map is already present)
             world.run(() -> {
                 ObjectMap<Object, Integer> replayBefore = new ObjectMap<>();
@@ -113,7 +114,9 @@ public final class WorldView{
             throw error;
         }finally{
             if(!committed){
-                Throwable cleanup = Scopes.cleanup(failure, () -> cameras.inherit(world));
+                Throwable cleanup = failure;
+                if(createdInput) cleanup = Scopes.cleanup(cleanup, () -> WorldPlayer.releaseInput(world));
+                cleanup = Scopes.cleanup(cleanup, () -> cameras.inherit(world));
                 cleanup = Scopes.cleanup(cleanup, () -> parts.inherit(world));
                 cleanup = Scopes.cleanup(cleanup, () -> {
                     for(int i = addedListeners.size - 1; i >= 0; i--){
