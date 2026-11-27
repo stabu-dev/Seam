@@ -1,0 +1,25 @@
+name: Bug report
+description: Report a bug in Seam on the pinned Mindustry release.
+labels: [bug]
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: Seam & Mindustry versions
+      placeholder: "Seam 1.0-beta / Mindustry v160.8 / OS / JDK or Android API"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Provide steps or a minimal snippet that reproduces the bug on an official Mindustry build.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened & what you expected
+      description: Include the full stack trace, logs, or failing assertion if you have one.
+    validations:
+      required: true

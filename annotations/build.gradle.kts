@@ -1,0 +1,18 @@
+plugins{
+    `java-library`
+}
+
+sourceSets.main{
+    java.setSrcDirs(listOf("src"))
+    resources.setSrcDirs(listOf("resources"))
+}
+
+java{
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+tasks.withType<JavaCompile>().configureEach{
+    options.encoding = "UTF-8"
+    options.release.set(17)
+}

@@ -1,0 +1,39 @@
+name: Deployment
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    if: ${{ github.repository == 'stabu-dev/Seam' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: temurin
+          cache: gradle
+      - name: Publish Artifacts
+        env:
+          MAVEN_TOKEN: ${{ secrets.MAVEN_TOKEN_GITHUB }}
+        run: |
+          chmod +x gradlew
+          ./gradlew -PartifactVersion="${GITHUB_REF_NAME}" -Dmaven.repo.local="$(pwd)/.out" publishToMavenLocal --no-daemon
+
+          git clone "https://x-access-token:${MAVEN_TOKEN}@github.com/stabu-dev/SeamMaven.git" --depth=1 ../SeamMaven
+          cp -r .out/* ../SeamMaven
+          cd ../SeamMaven
+
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Publishing for ${GITHUB_REF_NAME}"
+          git push "https://x-access-token:${MAVEN_TOKEN}@github.com/stabu-dev/SeamMaven.git"

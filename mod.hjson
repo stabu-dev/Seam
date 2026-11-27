@@ -1,0 +1,8 @@
+name: seam
+displayName: Seam
+author: stabu
+main: seam.Seam
+description: "Library mod for running multiple independent worlds in Mindustry."
+version: 1.0-beta
+minGameVersion: 160.8
+java: true
